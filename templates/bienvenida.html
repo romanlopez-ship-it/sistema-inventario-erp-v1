@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}ERP Django · SECAM Celaya{% endblock %}
+
+{% block extrastyle %}
+<style>
+    /* Estilos personalizados para mantener tu diseño original dentro de Jazzmin */
+    .custom-jazzmin-card {
+        background: #142033; 
+        border: 1px solid #2A3F58;
+        border-left: 5px solid #D4AF37;
+        color: #E2EAF4;
+    }
+    .custom-title {
+        color: #D4AF37;
+        font-weight: bold;
+    }
+    .custom-text {
+        color: #8AA0B8;
+    }
+    .custom-badge {
+        background-color: rgba(212,175,55,.1);
+        color: #D4AF37;
+        border: 1px solid #D4AF37;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid d-flex justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="card custom-jazzmin-card shadow-lg" style="max-width: 480px; width: 100%; padding: 1rem; border-radius: 0px;">
+        
+        <div class="card-body text-center p-4">
+            <h1 class="custom-title h3 mb-3">📦 Mini ERP</h1>
+            
+            <p class="custom-text mb-1">Sistema de gestión empresarial</p>
+            <p class="custom-text mb-3">SECAM Celaya · Módulo II · W01</p>
+            
+            <div class="mb-4">
+                <span class="badge custom-badge px-2 py-1 mx-1">Django 4.2 LTS</span>
+                <span class="badge custom-badge px-2 py-1 mx-1">Python 3.11</span>
+                <span class="badge custom-badge px-2 py-1 mx-1">Espiral 1</span>
+            </div>
+            
+            <p class="mb-0">Estado: <strong class="text-success">✅ Operativo</strong></p>
+        </div>
+        
+    </div>
+</div>
+{% endblock %}

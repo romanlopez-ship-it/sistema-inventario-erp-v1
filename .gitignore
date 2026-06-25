@@ -1,0 +1,27 @@
+# Entorno Virtual (Portable)
+env_erp/
+venv/
+env/
+
+# Seguridad y Secretos
+.env
+
+# Base de Datos Local (SQLite)
+db.sqlite3
+
+# Archivos Estáticos de Producción
+staticfiles/
+
+# Python: Archivos temporales y caché
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Herramientas de Sistema
+.DS_Store
+Thumbs.db
