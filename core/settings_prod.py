@@ -29,7 +29,7 @@ DATABASES = {
     'default': dj_database_url.config(
         conn_max_age=600,          # conexiones persistentes 10 min
         conn_health_checks=True,   # verifica conexión antes de usarla
-        ssl_require=True,          # Render requiere SSL en PostgreSQL
+        ssl_require=False,          # Render requiere SSL en PostgreSQL
     )
 }
 
