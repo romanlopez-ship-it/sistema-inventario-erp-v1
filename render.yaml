@@ -11,30 +11,24 @@
 # pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
 # 
 
-services:
-  - type: web
-    name: erp-django-utec
-    env: python
-    plan: free                     # plan gratuito para desarrollo académico
-    region: oregon                 # us-west región gratuita de Render
-    branch: main
-    buildCommand: 
-      pip install -r requirements.txt
-      python manage.py collectstatic --no-input
-      python manage.py migrate
-    startCommand: gunicorn core.wsgi --workers 2 --timeout 120 --log-file -
-    healthCheckPath: /
-    envVars:
-      - key: DJANGO_SETTINGS_MODULE
-        value: core.settings_prod
-      - key: SECRET_KEY
-        generateValue: true        # Render genera una clave aleatoria segura
-      - key: DATABASE_URL
-        fromDatabase:
-          name: erp-django-db
-          property: connectionString
-      - key: PYTHON_VERSION
-        value: "3.11.9"
+services: 
+  - type: web 
+    name: erp-django-utec 
+    runtime: docker 
+    plan: free 
+    region: oregon 
+    branch: main 
+    dockerfilePath: ./Dockerfile 
+    healthCheckPath: / 
+    envVars: 
+    - key: DJANGO_SETTINGS_MODULE 
+      value: core.settings_prod 
+    - key: SECRET_KEY 
+      generateValue: true 
+    - key: DATABASE_URL 
+      fromDatabase: 
+        name: erp-django-db 
+        property: connectionString 
 
 databases:
   - name: erp-django-db

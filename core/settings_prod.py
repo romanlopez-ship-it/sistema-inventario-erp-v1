@@ -15,14 +15,20 @@ import dj_database_url
 DEBUG      = False
 SECRET_KEY = os.environ['SECRET_KEY']   # obligatorio; sin default en prod
 
-# ── HOSTS PERMITIDOS ────────────────────────────────────────────────────────
+# ── HOSTS PERMITIDOS Y CSRF ────────────────────────────────────────────────────────
 # Render inyecta RENDER_EXTERNAL_HOSTNAME automáticamente
 _render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '')
 _extra_hosts  = os.environ.get('ALLOWED_HOSTS', '').split(',')
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1'] + (
+ALLOWED_HOSTS = ['localhost', '127.0.0.1','.render.com'] + (
     [_render_host] if _render_host else []
 ) + [h for h in _extra_hosts if h]
+
+# Permite enviar formularios y hacer login sobre HTTPS en Render  
+# Se requiere CSRF_TRUSTED_ORIGINS para que Django acepte formularios desde el dominio de Render.
+# Actualizado en  21/10/2026
+if _render_host: CSRF_TRUSTED_ORIGINS = [f'https://{_render_host}'] 
+else: CSRF_TRUSTED_ORIGINS = ['https://*.render.com']
 
 # ── BASE DE DATOS: PostgreSQL via DATABASE_URL ─────────────────────────────
 DATABASES = {
