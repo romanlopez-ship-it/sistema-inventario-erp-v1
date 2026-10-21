@@ -28,3 +28,6 @@ chmod +x docker-entrypoint.sh
 :: Verificar el atributo en git para que se preserve en Linux:
 git add docker-entrypoint.sh
 git update-index --chmod=+x docker-entrypoint.sh
+
+# Crear superusuario automáticamente si no existe echo "Verificando superusuario..." 
+python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@email.com', '12345')"
