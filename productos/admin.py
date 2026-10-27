@@ -16,6 +16,7 @@ class CategoriaAdmin(admin.ModelAdmin):
 @admin.register(Producto)
 class ProductoAdmin(admin.ModelAdmin):
     """Admin de productos: lista con categoría, proveedor y stock."""
+    """Admin de productos con preview de imagen — W11."""
 
     list_display   = ['pk', 'imagen_preview', 'nombre', 'precio', 'stock',
                       'categoria', 'proveedor', 'activo', 'creado']

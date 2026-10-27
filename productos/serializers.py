@@ -59,7 +59,7 @@ class ProductoSerializer(serializers.ModelSerializer):
             'id', 'nombre', 'precio', 'stock',
             'categoria', 'categoria_nombre',
             'proveedor', 'proveedor_nombre',
-            'activo', 'imagen_url', 'creado',
+            'activo', 'imagen', 'imagen_url', 'creado',
         ]
         read_only_fields = [
             'id', 'creado',

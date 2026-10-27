@@ -36,3 +36,4 @@ databases:
     user: erp_user
     plan: free                     # PostgreSQL gratuito en Render (90 días)
     region: oregon
+

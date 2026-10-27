@@ -79,7 +79,7 @@ class ProductoCreateView(LoginRequiredMixin, CreateView):
     """
 
     model         = Producto
-    form_class    = ProductoForm    # Formulario personalizado con validación de imagen
+    form_class    = ProductoForm    # Debe usar el formulario personalizado con validación de imagen, y no fields.
     template_name = 'productos/crear.html'
     success_url   = reverse_lazy('productos:lista')  # reverse_lazy (no reverse)
 
