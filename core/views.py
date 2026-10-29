@@ -69,4 +69,4 @@ def status_check(request):
     """
     """Vista discreta de diagnóstico estilizada con el sistema Fable 5 AzulERP."""
     context = obtener_contexto_diagnostico()
-    return render(request, 'status_check.html', {'context': context})
+    return render(request, 'sys_status.html', {'context': context})
