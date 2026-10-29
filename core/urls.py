@@ -21,6 +21,8 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework.authtoken.views import obtain_auth_token
+
+# Importar vistas del núcleo
 from . import views
 
 """ Forzar la creación del superusuario en producción 
@@ -53,6 +55,10 @@ api_urlpatterns = (
 urlpatterns = [
     path('admin/',       admin.site.urls),
     path('',             views.bienvenida,             name='inicio'),
+    
+    # Ruta discreta/oculta para verificación del servidor en Render
+    path("_sys_status/", views.status_check, name="status_check"),
+
     # Allauth (login / logout / registro)
     path('accounts/',    include('allauth.urls')),     # ← agregar 
     # API REST

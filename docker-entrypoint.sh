@@ -24,12 +24,5 @@ exec gunicorn core.wsgi \
     --timeout 120 \
     --log-file - \
     --access-logfile -
-Dar permisos de ejecución:
-:: En Windows (Git Bash o WSL):
-chmod +x docker-entrypoint.sh
-
-:: Verificar el atributo en git para que se preserve en Linux:
-git add docker-entrypoint.sh
-git update-index --chmod=+x docker-entrypoint.sh
 
 

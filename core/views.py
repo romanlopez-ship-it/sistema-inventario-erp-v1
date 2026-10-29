@@ -5,7 +5,10 @@ Migración: HttpResponse → render() con templates y contexto.
 """
 from django.shortcuts import render
 from django.urls import reverse
+from django.contrib.admin.views.decorators import staff_member_required
 
+# Importación del módulo auxiliar de diagnóstico
+from core.diagnostics import obtener_reporte_stack_html
 
 def bienvenida(request):
     """Página de inicio del ERP con tarjetas de módulos.
@@ -55,3 +58,13 @@ def bienvenida(request):
         },
     ]
     return render(request, 'bienvenida.html', {'modulos': modulos})
+
+# Vista oculta / discreta para verificar el stack en Render
+@staff_member_required
+def status_check(request):
+    """Vista interna de diagnóstico del sistema (sólo personal autorizado).
+
+    Nota: Si deseas probarla en Render sin tener que iniciar sesión en el Admin
+    primero, puedes comentar o quitar la línea '@staff_member_required' temporalmente.
+    """
+    return obtener_reporte_stack_html()
