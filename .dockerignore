@@ -8,7 +8,7 @@ __pycache__/
 .git/
 .gitignore
 db.sqlite3
-#staticfiles/
+staticfiles/
 #media/
 *.md
 .vscode/

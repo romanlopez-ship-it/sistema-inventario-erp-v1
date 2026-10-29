@@ -20,6 +20,7 @@ from configuracion.models import ConfiguracionERP
 from .forms import DetalleVentaForm, VentaForm
 from .models import DetalleVenta, Venta
 
+import weasyprint  # Importación local para entorno Docker/Linux
 
 class VentaListView(ListView):
     """Lista paginada de ventas en orden cronológico inverso."""
@@ -103,7 +104,7 @@ class VentaDeleteView(LoginRequiredMixin, DeleteView):
 # ── W12: GENERACIÓN DE FACTURA PDF CON WEASYPRINT ────────────────────────────
 
 
-@login_required
+# @login_required
 def venta_pdf(request, venta_id: int) -> HttpResponse:
     """Genera y descarga la factura de una venta en formato PDF.
 
@@ -116,7 +117,6 @@ def venta_pdf(request, venta_id: int) -> HttpResponse:
     Returns:
         HttpResponse con Content-Type application/pdf y descarga directa.
     """
-    import weasyprint  # Importación local para entorno Docker/Linux
 
     venta = get_object_or_404(
         Venta.objects.select_related("cliente").prefetch_related(
@@ -136,6 +136,10 @@ def venta_pdf(request, venta_id: int) -> HttpResponse:
     )
 
     # base_url permite que WeasyPrint encuentre imágenes y archivos estáticos
+    # ── WeasyPrint: conversión HTML → PDF ─────────────────────────────
+    # base_url: permite que WeasyPrint encuentre imágenes relativas
+    # como /media/productos/logo.jpg o /static/css/factura.css.
+    # Sin base_url, las imágenes aparecen en blanco en el PDF.
     pdf_bytes = weasyprint.HTML(
         string=html_string,
         base_url=request.build_absolute_uri("/"),
