@@ -235,7 +235,7 @@
 
     <div class="header-folio">
         <div class="folio-num"># {{ venta.pk|stringformat:"05d" }}</div>
-        <div class="folio-fech">{{ venta.fecha|date:"d/m/Y" }}</div>
+        <div class="folio-fech"> {{ venta.fecha|date:"d/m/Y" }}</div>
     </div>
 </div>
 
@@ -256,7 +256,7 @@
         </tr>
         <tr>
             <td class="lbl">Fecha de emisión</td>
-            <td>{{ venta.fecha|date:"d/m/Y H:i" }}</td>
+            <td>{{ venta.fecha|date:"d/m/Y" }}</td>
             <td class="lbl">IVA</td>
             <td>{{ config.iva_porcentaje }}%</td>
         </tr>
@@ -320,7 +320,7 @@
     <strong>Nota:</strong> Este documento es una representación de la factura generada por
     el sistema ERP Django de {{ config.nombre_empresa }}.
     {% if config.rfc %}RFC: {{ config.rfc }}.{% endif %}
-    Generado el {{ hoy|date:"d/m/Y \a \l\a\s H:i" }} h.
+    Generado el {{ hoy|date:"d/m/Y \a \l\a\s H:i" }} h h.
 </div>
 
 </body>
