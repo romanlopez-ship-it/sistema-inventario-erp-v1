@@ -27,4 +27,7 @@ urlpatterns = [
     path('<int:venta_id>/',         views.VentaDetailView.as_view(),    name='detalle'),
     path('nueva/',                  views.crear_venta,                 name='crear'),
     path('<int:venta_id>/eliminar/',views.VentaDeleteView.as_view(),   name='eliminar'),
+
+   # Ruta W12 para la descarga de PDF 
+   path('<int:venta_id>/pdf/'      ,views.venta_pdf,                   name='pdf'), 
 ]

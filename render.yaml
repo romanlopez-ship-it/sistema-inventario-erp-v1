@@ -11,29 +11,127 @@
 # pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
 # 
 
-services: 
-  - type: web 
-    name: erp-django-utec 
-    runtime: docker 
-    plan: free 
-    region: oregon 
-    branch: main 
-    dockerfilePath: ./Dockerfile 
-    healthCheckPath: / 
-    envVars: 
-    - key: DJANGO_SETTINGS_MODULE 
-      value: core.settings_prod 
-    - key: SECRET_KEY 
-      generateValue: true 
-    - key: DATABASE_URL 
-      fromDatabase: 
-        name: erp-django-db 
-        property: connectionString 
 
+# render.yaml — versión con Docker (reemplaza la versión buildpack)
+services:
+
+  # ── Aplicación Web Django ──────────────────────────────────────
+  - type: web
+    name: erp-django-utec
+    runtime: docker                         # ← CAMBIO CLAVE vs buildpack
+    dockerfilePath: ./Dockerfile         # ruta al Dockerfile en el repo
+    dockerContext: .                     # contexto de build (raíz del repo)
+    plan: free
+    region: oregon
+
+    # ENTRYPOINT ya definido en Dockerfile → no se necesita buildCommand
+    # render.yaml no necesita startCommand; usa el ENTRYPOINT del Dockerfile
+
+    healthCheckPath: /
+
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: core.settings_prod
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: erp-django-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: erp-django-redis
+          property: connectionString
+      - key: REDIS_CACHE_URL
+        fromService:
+          type: redis
+          name: erp-django-redis
+          property: connectionString
+        # Nota: en producción ideal usar una segunda instancia Redis
+        # para separar broker y caché. En el plan gratuito, se usa la misma.
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        value: "ERP Django <noreply@erp-django.com>"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+
+  # ── Celery Worker ──────────────────────────────────────────────
+  - type: worker
+    name: erp-django-celery-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    startCommand: celery -A core worker -l info -Q erp_django
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: core.settings_prod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: erp-django-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: erp-django-redis
+          property: connectionString
+      - key: SENDGRID_API_KEY
+        sync: false
+
+  # ── Celery Beat ────────────────────────────────────────────────
+  - type: worker
+    name: erp-django-celery-beat
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    numInstances: 1    # CRÍTICO: el Beat scheduler solo debe tener 1 instancia
+    startCommand: celery -A core beat -l info
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: core.settings_prod
+      - key: DATABASE_URL
+        fromDatabase:
+          name: erp-django-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: erp-django-redis
+          property: connectionString
+
+  # ── Redis ──────────────────────────────────────────────────────
+  - type: redis
+    name: erp-django-redis
+    plan: free
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
+
+  # ── Base de Datos ──────────────────────────────────────────────
 databases:
   - name: erp-django-db
+    plan: free
+    region: oregon
     databaseName: erp_db
     user: erp_user
-    plan: free                     # PostgreSQL gratuito en Render (90 días)
-    region: oregon
+    
 

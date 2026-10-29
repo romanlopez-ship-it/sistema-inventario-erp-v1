@@ -22,3 +22,44 @@
           property: connectionString
       - key: PYTHON_VERSION
         value: "3.11.9"
+
+
+# render.yaml 
+# Antes de la Modificacion con W12
+# Documentación: https://render.com/docs/infrastructure-as-code
+#
+# Si tienes problemas con la migracion
+# Para corregir esto y que tu implementación sea rápida y profesional, 
+# sigue estos pasos en el Dashboard de Render:
+# Ve a tu Web Service en Render.com.
+# Entra a la pestaña Settings.
+# Busca la sección Build Command y reemplaza lo que tienes por este comando exacto 
+# (fíjate bien en los &&):
+# pip install -r requirements.txt && python manage.py collectstatic --no-input && python manage.py migrate
+# 
+
+services: 
+  - type: web 
+    name: erp-django-utec 
+    runtime: docker 
+    plan: free 
+    region: oregon 
+    branch: main 
+    dockerfilePath: ./Dockerfile 
+    healthCheckPath: / 
+    envVars: 
+    - key: DJANGO_SETTINGS_MODULE 
+      value: core.settings_prod 
+    - key: SECRET_KEY 
+      generateValue: true 
+    - key: DATABASE_URL 
+      fromDatabase: 
+        name: erp-django-db 
+        property: connectionString 
+
+databases:
+  - name: erp-django-db
+    databaseName: erp_db
+    user: erp_user
+    plan: free                     # PostgreSQL gratuito en Render (90 días)
+    region: oregon
