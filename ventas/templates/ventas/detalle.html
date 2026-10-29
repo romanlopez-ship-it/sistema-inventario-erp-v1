@@ -5,9 +5,12 @@
 {% block content %}
 <div class="erp-page-title">
     <h2>💰 Venta #{{ venta.pk }}</h2>
+     
     {% if user.is_authenticated %}
         <a href="{% url 'ventas:eliminar' venta.pk %}"
            class="btn-erp-danger ms-auto">Eliminar venta</a>
+        <a href="{% url 'ventas:pdf' venta.pk %}"
+           class="btn-erp-primary" ms-auto>📄 Descargar Factura (PDF) </a>   
     {% endif %}
 </div>
 
