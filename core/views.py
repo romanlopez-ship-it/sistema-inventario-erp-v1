@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.contrib.admin.views.decorators import staff_member_required
 
 # Importación del módulo auxiliar de diagnóstico
-from core.diagnostics import obtener_reporte_stack_html
+from core.diagnostics import obtener_contexto_diagnostico
 
 def bienvenida(request):
     """Página de inicio del ERP con tarjetas de módulos.
@@ -67,4 +67,6 @@ def status_check(request):
     Nota: Si deseas probarla en Render sin tener que iniciar sesión en el Admin
     primero, puedes comentar o quitar la línea '@staff_member_required' temporalmente.
     """
-    return obtener_reporte_stack_html()
+    """Vista discreta de diagnóstico estilizada con el sistema Fable 5 AzulERP."""
+    context = obtener_contexto_diagnostico()
+    return render(request, 'status_check.html', {'context': context})

@@ -5,13 +5,11 @@ import platform
 import sys
 import django
 from django.conf import settings
-from django.http import HttpResponse
-from django.template import Context, Template
 
 
-def obtener_reporte_stack_html():
-    """Ejecuta las pruebas del sistema y devuelve el HTML formateado."""
-    # 1. Entorno
+def obtener_contexto_diagnostico() -> dict:
+    """Ejecuta las pruebas de diagnóstico y retorna el contexto estructurado."""
+    # 1. Entorno de Ejecución
     py_version = sys.version
     os_platform = platform.platform()
 
@@ -64,7 +62,7 @@ def obtener_reporte_stack_html():
     except Exception as e:
         weasy_status["error"] = str(e)
 
-    # 5. Librerías clave
+    # 5. Paquetes Clave del ERP
     pkgs = {}
     for pkg_name, module_name in [
         ("Django REST Framework", "rest_framework"),
@@ -102,68 +100,13 @@ def obtener_reporte_stack_html():
         ),
     }
 
-    html_template = """
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-        <meta charset="UTF-8">
-        <title>Diagnóstico de Servidor & Stack</title>
-    </head>
-    <body>
-        <h1>🛠️ Diagnóstico de Servidor & Stack</h1>
-        
-        <h2>1. Entorno</h2>
-        <ul>
-            <li>Python: {{ py_version }}</li>
-            <li>S.O.: {{ os_platform }}</li>
-            <li>Django: {{ django_version }}</li>
-        </ul>
-
-        <h2>2. Base de Datos (PostgreSQL)</h2>
-        <p>Estado: {% if db_status.ok %}✅ CONECTADO ({{ db_status.vendor }}){% else %}❌ ERROR DE CONEXIÓN{% endif %}</p>
-        <p>Versión: {{ db_status.version }}</p>
-        {% if db_status.error %}<p>Error: {{ db_status.error }}</p>{% endif %}
-
-        <h2>3. Motor de PDF (WeasyPrint)</h2>
-        <p>Estado: {% if weasy_status.ok %}✅ FUNCIONAL (v{{ weasy_status.version }}){% else %}❌ FALLÓ{% endif %}</p>
-        {% if weasy_status.ok %}
-        <p>PDF de prueba generado correctamente ({{ weasy_status.pdf_bytes }} bytes).</p>
-        {% endif %}
-        {% if weasy_status.error %}<p>Error: {{ weasy_status.error }}</p>{% endif %}
-
-        <h2>4. Caché / Redis</h2>
-        <p>Estado: {% if redis_status.ok %}✅ CONECTADO{% else %}❌ ERROR{% endif %}</p>
-        <p>Backend: {{ redis_status.backend }}</p>
-        {% if redis_status.error %}<p>Error: {{ redis_status.error }}</p>{% endif %}
-
-        <h2>5. Paquetes</h2>
-        <ul>
-            {% for name, ver in pkgs.items %}
-            <li><strong>{{ name }}:</strong> {{ ver }}</li>
-            {% endfor %}
-        </ul>
-
-        <h2>6. Variables de Entorno</h2>
-        <ul>
-            {% for key, val in env_vars.items %}
-            <li><strong>{{ key }}:</strong> {{ val }}</li>
-            {% endfor %}
-        </ul>
-    </body>
-    </html>
-    """
-
-    t = Template(html_template)
-    c = Context(
-        {
-            "py_version": py_version,
-            "os_platform": os_platform,
-            "django_version": django.get_version(),
-            "db_status": db_status,
-            "redis_status": redis_status,
-            "weasy_status": weasy_status,
-            "pkgs": pkgs,
-            "env_vars": env_vars,
-        }
-    )
-    return HttpResponse(t.render(c))
+    return {
+        "py_version": py_version,
+        "os_platform": os_platform,
+        "django_version": django.get_version(),
+        "db_status": db_status,
+        "redis_status": redis_status,
+        "weasy_status": weasy_status,
+        "pkgs": pkgs,
+        "env_vars": env_vars,
+    }

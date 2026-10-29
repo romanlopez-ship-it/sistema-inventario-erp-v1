@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+
+{% block title %}Diagnóstico del Sistema{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <!-- Encabezado Principal -->
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3">🛠️ Diagnóstico de Servidor & Stack</h1>
+            <p class="text-muted">Producción / Render</p>
+        </div>
+    </div>
+
+    <!-- 1. Entorno de Ejecución & Servidor -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">1. Entorno de Ejecución & Servidor</h5>
+        </div>
+        <div class="card-body">
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><strong>Versión de Python:</strong></span>
+                    <span>{{ py_version }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><strong>Sistema Operativo:</strong></span>
+                    <span>{{ os_platform }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><strong>Versión de Django:</strong></span>
+                    <span>{{ django_version }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 2. Base de Datos (PostgreSQL) -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">2. Base de Datos (PostgreSQL)</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>Estado de Conexión:</strong> 
+                {% if db_status.ok %}
+                    <span class="badge bg-success">✅ Conectado ({{ db_status.vendor }})</span>
+                {% else %}
+                    <span class="badge bg-danger">❌ Error de Conexión</span>
+                {% endif %}
+            </p>
+            <p><strong>Versión del Servidor:</strong> {{ db_status.version }}</p>
+            {% if db_status.error %}
+                <p class="text-danger"><strong>Detalle del Error:</strong> {{ db_status.error }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 3. Motor de PDF (WeasyPrint) -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">3. Motor de PDF (WeasyPrint)</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>Estado y Librerías Nativas:</strong> 
+                {% if weasy_status.ok %}
+                    <span class="badge bg-success">✅ Funcional (v{{ weasy_status.version }})</span>
+                {% else %}
+                    <span class="badge bg-danger">❌ No disponible</span>
+                {% endif %}
+            </p>
+            {% if weasy_status.ok %}
+                <p class="text-success">Prueba de PDF en Memoria: Se generó correctamente un PDF de prueba de {{ weasy_status.pdf_bytes }} bytes.</p>
+            {% endif %}
+            {% if weasy_status.error %}
+                <p class="text-danger"><strong>Detalle del Error:</strong> {{ weasy_status.error }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 4. Servidor de Caché & Broker (Redis) -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">4. Servidor de Caché & Broker (Redis)</h5>
+        </div>
+        <div class="card-body">
+            <p><strong>Estado del Servicio:</strong> 
+                {% if redis_status.ok %}
+                    <span class="badge bg-success">✅ Conectado (PING/PONG OK)</span>
+                {% else %}
+                    <span class="badge bg-danger">❌ Error de Conexión</span>
+                {% endif %}
+            </p>
+            <p><strong>Backend Configurado:</strong> <code>{{ redis_status.backend }}</code></p>
+            {% if redis_status.error %}
+                <p class="text-danger"><strong>Detalle del Error:</strong> {{ redis_status.error }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 5. Paquetes y Librerías del ERP -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">5. Paquetes y Librerías del ERP</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-bordered mb-0">
+                    <thead>
+                        <tr>
+                            <th>Librería / Módulo</th>
+                            <th>Estado / Versión</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for name, ver in pkgs.items %}
+                        <tr>
+                            <td>{{ name }}</td>
+                            <td>{{ ver }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Variables de Entorno de Producción -->
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">6. Variables de Entorno de Producción</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-bordered mb-0">
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Valor / Configuración</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for key, val in env_vars.items %}
+                        <tr>
+                            <td><code>{{ key }}</code></td>
+                            <td>{{ val }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
