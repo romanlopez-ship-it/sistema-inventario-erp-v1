@@ -26,8 +26,7 @@ pip-delete-this-directory.txt
 .DS_Store
 Thumbs.db
 
-# Archivos subidos por usuarios (media)
-media/
+# media/ se incluye en el repo por ahora (imágenes de ejemplo del curso).
 
 # Nunca subir .env (pero sí la plantilla)
 !.env.example

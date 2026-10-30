@@ -292,22 +292,19 @@
 <!-- ── TOTALES ───────────────────────────────────────────────────── -->
 <div class="total-section">
     <table class="total-tabla">
-        {% with subtotal=venta.total iva_pct=config.iva_porcentaje %}
+        {# subtotal, iva y total_con_iva vienen calculados desde la vista #}
         <tr>
             <td class="lbl">Subtotal (sin IVA)</td>
             <td class="val">${{ subtotal }}</td>
         </tr>
         <tr>
-            <td class="lbl">IVA ({{ iva_pct }}%)</td>
-            <td class="val">
-                ${% widthratio subtotal 100 iva_pct %}
-            </td>
+            <td class="lbl">IVA ({{ config.iva_porcentaje }}%)</td>
+            <td class="val">${{ iva }}</td>
         </tr>
         <tr class="final">
             <td class="lbl" style="font-size:11.5pt;">TOTAL</td>
-            <td class="val gold">${{ subtotal }}</td>
+            <td class="val gold">${{ total_con_iva }}</td>
         </tr>
-        {% endwith %}
     </table>
 </div>
 

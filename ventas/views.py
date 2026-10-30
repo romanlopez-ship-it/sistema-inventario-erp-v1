@@ -6,6 +6,7 @@ Exportación PDF: venta_pdf con WeasyPrint (W12).
 """
 
 import mimetypes
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
@@ -159,6 +160,19 @@ def _url_fetcher_local(url: str, timeout: int = 10, ssl_context=None):
     return weasyprint.default_url_fetcher(url, timeout=timeout, ssl_context=ssl_context)
 
 
+def calcular_totales(subtotal, iva_porcentaje) -> dict:
+    """Subtotal, IVA y total con 2 decimales (redondeo comercial).
+
+    Venta.total es la suma de las líneas SIN IVA; el IVA se suma aparte.
+    Ejemplo: calcular_totales(Decimal("3000"), Decimal("16"))
+             -> subtotal 3000.00, iva 480.00, total 3480.00
+    """
+    centavos = Decimal("0.01")
+    subtotal = Decimal(subtotal).quantize(centavos, ROUND_HALF_UP)
+    iva = (subtotal * Decimal(iva_porcentaje) / 100).quantize(centavos, ROUND_HALF_UP)
+    return {"subtotal": subtotal, "iva": iva, "total_con_iva": subtotal + iva}
+
+
 @login_required
 def venta_pdf(request, venta_id: int) -> HttpResponse:
     """Genera y descarga la factura de una venta en formato PDF.
@@ -184,6 +198,7 @@ def venta_pdf(request, venta_id: int) -> HttpResponse:
         "venta": venta,
         "config": config,
         "hoy": timezone.localdate(),  # fecha en TIME_ZONE (America/Mexico_City)
+        **calcular_totales(venta.total, config.iva_porcentaje),
     }
 
     html_string = render_to_string("ventas/factura_pdf.html", context, request=request)

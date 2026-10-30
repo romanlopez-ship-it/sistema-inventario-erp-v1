@@ -57,3 +57,33 @@ class VentaPdfTest(TestCase):
         r = self.client.get(self.url)
         self.assertEqual(r.status_code, 200)
         self.assertTrue(r.content.startswith(b"%PDF"))
+
+
+class TotalesFacturaTest(TestCase):
+    """El TOTAL de la factura debe incluir el IVA."""
+
+    def test_calculo_iva_y_total(self):
+        from ventas.views import calcular_totales
+        t = calcular_totales(Decimal("3000"), Decimal("16.00"))
+        self.assertEqual(t["subtotal"], Decimal("3000.00"))
+        self.assertEqual(t["iva"], Decimal("480.00"))
+        self.assertEqual(t["total_con_iva"], Decimal("3480.00"))
+
+    def test_redondeo_a_centavos(self):
+        from ventas.views import calcular_totales
+        t = calcular_totales(Decimal("10.05"), Decimal("16.00"))
+        self.assertEqual(t["iva"], Decimal("1.61"))           # 1.608 -> 1.61
+        self.assertEqual(t["total_con_iva"], Decimal("11.66"))
+
+    def test_plantilla_muestra_total_con_iva(self):
+        from django.template.loader import render_to_string
+        from ventas.views import calcular_totales
+        cliente = Cliente.objects.create(nombre="C", correo="c@example.com")
+        venta = Venta.objects.create(cliente=cliente)
+        config = ConfiguracionERP.get_instance()
+        html = render_to_string("ventas/factura_pdf.html", {
+            "venta": venta, "config": config,
+            **calcular_totales(Decimal("3000"), config.iva_porcentaje),
+        })
+        self.assertIn("$480.00", html)
+        self.assertIn("$3480.00", html)
