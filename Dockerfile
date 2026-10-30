@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi-dev \
     shared-mime-info \
     fonts-liberation \
+    libharfbuzz-subset0 \
     # ── Fuentes adicionales para mejor tipografía ───────────────
     fonts-dejavu-core \
     # ── Dependencias para Pillow (imágenes en Django) ───────────
