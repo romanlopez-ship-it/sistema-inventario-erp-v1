@@ -12,7 +12,7 @@ import os
 import dj_database_url 
 
 # Seguridad básica
-DEBUG      = False
+DEBUG = False
 SECRET_KEY = os.environ['SECRET_KEY']   # obligatorio; sin default en prod
 
 # ── HOSTS PERMITIDOS Y CSRF ────────────────────────────────────────────────────────
@@ -35,11 +35,15 @@ DATABASES = {
     'default': dj_database_url.config(
         conn_max_age=600,          # conexiones persistentes 10 min
         conn_health_checks=True,   # verifica conexión antes de usarla
-        ssl_require=False,          # Render requiere SSL en PostgreSQL
+        ssl_require=False,         # la URL interna de Render no exige SSL
     )
 }
 
 # HTTPS y cookies seguras
+# Render termina TLS en su proxy y reenvía por HTTP con X-Forwarded-Proto.
+# Sin esta línea, Django cree que la petición es http:// (bucles de
+# redirección y build_absolute_uri() con http://).
+SECURE_PROXY_SSL_HEADER        = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT            = True
 SECURE_HSTS_SECONDS            = 31536000    # 1 año
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
