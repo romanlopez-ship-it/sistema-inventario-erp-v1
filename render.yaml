@@ -3,7 +3,7 @@
 #
 # Fuera de alcance hasta su semana (no tienen código todavía):
 #   W13+  Stripe / SendGrid (variables de entorno)
-#   W16+  Redis (type: keyvalue), Celery worker/beat, Flower
+#   W16+  Redis, Celery worker/beat, Flower
 #         Nota: Render NO tiene plan gratuito para background workers.
 
 services:
