@@ -4,15 +4,11 @@
     <meta charset="UTF-8">
     <title>Factura {{ pedido.numero_pedido|default:venta.pk }}</title>
     <style>
-        /* ── Variables de color Fable 5 AzulERP ──────────────────── */
-        :root {
-            --navy:  #0A2342;
-            --gold:  #B8860B;
-            --sky:   #4A90D9;
-            --ice:   #E8F0FB;
-            --muted: #5A6A7E;
-            --text:  #1A1A2E;
-        }
+        /* ── Paleta Fable 5 AzulERP ─────────────────────────────────
+           WeasyPrint 60.x no resuelve var() dentro de propiedades
+           abreviadas (border, background), así que los colores van fijos:
+           navy #0A2342 · gold #B8860B · sky #4A90D9 · ice #E8F0FB
+           muted #5A6A7E · text #1A1A2E                              */
 
         /* ── Configuración de página ──────────────────────────────── */
         @page {
@@ -56,7 +52,7 @@
         body {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 10.5pt;
-            color: var(--text);
+            color: #1A1A2E;
             line-height: 1.5;
         }
 
@@ -65,31 +61,30 @@
             position: running(header-running);
             display: flex;
             align-items: center;
-            gap: 12px;
-            border-bottom: 2px solid var(--gold);
+            border-bottom: 2px solid #B8860B;
             padding-bottom: .3cm;
         }
-        #header-running .empresa { font-weight: bold; color: var(--navy); }
-        #header-running .folio   { margin-left: auto; color: var(--gold); font-weight: bold; }
+        #header-running .empresa { font-weight: bold; margin-right: 12px; color: #0A2342; }
+        #header-running .folio   { margin-left: auto; color: #B8860B; font-weight: bold; }
 
         /* String para el pie izquierdo */
         #empresa-string { string-set: empresa-nombre content(); }
 
         /* ── ENCABEZADO (primera página) ───────────────────────────── */
         .header {
-            background: var(--navy);
+            background: #0A2342;
             color: #FFFFFF;
             padding: 18px 24px;
-            border-bottom: 4px solid var(--gold);
+            border-bottom: 4px solid #B8860B;
             margin-bottom: 20px;
             display: flex;
             align-items: center;
-            gap: 16px;
         }
         .header-logo {
             width: 64px;
             height: 64px;
             object-fit: contain;
+            margin-right: 16px;
             border-radius: 8px;
             background: rgba(255,255,255,.08);
         }
@@ -101,15 +96,16 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 18px;
+            margin-right: 16px;
         }
-        .header-title { font-size: 22pt; font-weight: bold; color: var(--gold); }
+        .header-title { font-size: 22pt; font-weight: bold; color: #B8860B; }
         .header-empresa { color: rgba(255,255,255,.78); font-size: 10pt; margin-top: 2px; }
         .header-folio {
             margin-left: auto;
             text-align: right;
         }
-        .header-folio .folio-num { font-size: 15pt; font-weight: bold; color: var(--gold); }
+        .header-folio .folio-num { font-size: 15pt; font-weight: bold; color: #B8860B; }
         .header-folio .folio-fech { color: rgba(255,255,255,.68); font-size: 9pt; }
 
         /* ── SECCIÓN DE DATOS DEL CLIENTE ──────────────────────────── */
@@ -121,12 +117,12 @@
         .datos-tabla td {
             padding: 5px 9px;
             font-size: 9.5pt;
-            border: 1px solid var(--ice);
+            border: 1px solid #E8F0FB;
         }
         .datos-tabla .lbl {
-            background: var(--ice);
+            background: #E8F0FB;
             font-weight: bold;
-            color: var(--navy);
+            color: #0A2342;
             width: 28%;
         }
 
@@ -143,20 +139,20 @@
         tfoot { display: table-footer-group; }
 
         .productos-tabla thead th {
-            background: var(--navy);
+            background: #0A2342;
             color: #FFFFFF;
             padding: 8px 11px;
             font-size: 9pt;
             text-align: left;
             text-transform: uppercase;
             letter-spacing: .04em;
-            border-bottom: 3px solid var(--gold);
+            border-bottom: 3px solid #B8860B;
         }
         .productos-tabla thead th.num { text-align: right; }
         .productos-tabla tbody td {
             padding: 7px 11px;
             font-size: 9.5pt;
-            border-bottom: 1px solid var(--ice);
+            border-bottom: 1px solid #E8F0FB;
             /* Evitar cortar una fila entre dos páginas */
             page-break-inside: avoid;
         }
@@ -169,30 +165,30 @@
         .total-tabla td {
             padding: 6px 10px;
             font-size: 9.5pt;
-            border: 1px solid var(--ice);
+            border: 1px solid #E8F0FB;
         }
         .total-tabla .lbl {
-            background: var(--ice);
+            background: #E8F0FB;
             font-weight: bold;
-            color: var(--navy);
+            color: #0A2342;
         }
         .total-tabla .val { text-align: right; }
         .total-tabla tr.final td {
             background: #FDF8E8;
-            border-top: 2px solid var(--gold);
+            border-top: 2px solid #B8860B;
             font-weight: bold;
             font-size: 11.5pt;
         }
-        .total-tabla .val.gold { color: var(--gold); font-size: 12.5pt; }
+        .total-tabla .val.gold { color: #B8860B; font-size: 12.5pt; }
 
         /* ── NOTA LEGAL / PIE ─────────────────────────────────────── */
         .nota {
             margin-top: 24px;
             padding: 12px 16px;
-            border-left: 4px solid var(--sky);
+            border-left: 4px solid #4A90D9;
             background: #F5F9FF;
             font-size: 8.5pt;
-            color: var(--muted);
+            color: #5A6A7E;
             /* No cortar la nota entre páginas */
             page-break-inside: avoid;
         }
@@ -206,7 +202,7 @@
 -->
 <div id="header-running">
     <span class="empresa">{{ config.nombre_empresa }}</span>
-    {% if config.rfc %}<span style="color:var(--muted);font-size:8.5pt;">RFC: {{ config.rfc }}</span>{% endif %}
+    {% if config.rfc %}<span style="color:#5A6A7E;font-size:8.5pt;">RFC: {{ config.rfc }}</span>{% endif %}
     <span class="folio">Factura #{{ venta.pk|stringformat:"05d" }}</span>
 </div>
 
@@ -222,7 +218,7 @@
         -->
         <img class="header-logo" src="{{ config.logo.url }}" alt="Logo">
     {% else %}
-        <div class="header-logo-placeholder">📦</div>
+        <div class="header-logo-placeholder">ERP</div>
     {% endif %}
 
     <div>
@@ -285,7 +281,7 @@
         </tr>
         {% empty %}
         <tr>
-            <td colspan="5" style="text-align:center;padding:16px;color:var(--muted);">
+            <td colspan="5" style="text-align:center;padding:16px;color:#5A6A7E;">
                 Sin líneas de detalle registradas.
             </td>
         </tr>
