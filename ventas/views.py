@@ -5,15 +5,21 @@ Escritura: crear_venta y VentaDeleteView (W08).
 Exportación PDF: venta_pdf con WeasyPrint (W12).
 """
 
-from datetime import date, timezone
+import mimetypes
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
 from django.conf import settings
+from django.contrib.staticfiles import finders
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
+from django.http.request import validate_host
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic import DeleteView, DetailView, ListView
 
 from configuracion.models import ConfiguracionERP
@@ -105,7 +111,55 @@ class VentaDeleteView(LoginRequiredMixin, DeleteView):
 # ── W12: GENERACIÓN DE FACTURA PDF CON WEASYPRINT ────────────────────────────
 
 
-# @login_required
+def _ruta_local(url_path: str) -> Path | None:
+    """Traduce /static/... o /media/... a un archivo en disco (o None)."""
+    static_prefix = "/" + settings.STATIC_URL.lstrip("/")
+    media_prefix = "/" + settings.MEDIA_URL.lstrip("/")
+
+    if url_path.startswith(static_prefix):
+        relativa = url_path[len(static_prefix):]
+        candidata = Path(settings.STATIC_ROOT) / relativa
+        if candidata.is_file():
+            return candidata
+        encontrada = finders.find(relativa)  # útil en desarrollo, sin collectstatic
+        return Path(encontrada) if encontrada else None
+
+    if url_path.startswith(media_prefix):
+        raiz = Path(settings.MEDIA_ROOT).resolve()
+        candidata = (raiz / url_path[len(media_prefix):]).resolve()
+        # Evita salir de MEDIA_ROOT con rutas tipo ../
+        if raiz in candidata.parents and candidata.is_file():
+            return candidata
+    return None
+
+
+def _url_fetcher_local(url: str, timeout: int = 10, ssl_context=None):
+    """url_fetcher de WeasyPrint que lee /static/ y /media/ desde disco.
+
+    Evita que WeasyPrint haga peticiones HTTP al propio servidor (lento y
+    puede bloquear a los workers de Gunicorn). Si el archivo no existe
+    (p. ej. un logo perdido por el disco efímero de Render), se lanza
+    FileNotFoundError: WeasyPrint solo registra un aviso y omite la imagen.
+    Las URLs externas (p. ej. media en S3) usan el fetcher por defecto.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme in ("http", "https", "file"):
+        ruta = _ruta_local(unquote(parsed.path))
+        if ruta is not None:
+            return {
+                "string": ruta.read_bytes(),
+                "mime_type": mimetypes.guess_type(ruta.name)[0],
+                "filename": ruta.name,
+            }
+        propio = validate_host(
+            parsed.hostname or "", ["localhost", "127.0.0.1", *settings.ALLOWED_HOSTS]
+        )
+        if parsed.scheme == "file" or propio:
+            raise FileNotFoundError(url)
+    return weasyprint.default_url_fetcher(url, timeout=timeout, ssl_context=ssl_context)
+
+
+@login_required
 def venta_pdf(request, venta_id: int) -> HttpResponse:
     """Genera y descarga la factura de una venta en formato PDF.
 
@@ -129,20 +183,18 @@ def venta_pdf(request, venta_id: int) -> HttpResponse:
     context = {
         "venta": venta,
         "config": config,
-        "hoy": date.today(),
-        #"hoy": timezone.now(),  # ← Permite usar H:i sin lanzar TypeError
+        "hoy": timezone.localdate(),  # fecha en TIME_ZONE (America/Mexico_City)
     }
 
     html_string = render_to_string("ventas/factura_pdf.html", context, request=request)
 
-    # base_url permite que WeasyPrint encuentre imágenes y archivos estáticos
     # ── WeasyPrint: conversión HTML → PDF ─────────────────────────────
-    # base_url: permite que WeasyPrint encuentre imágenes relativas
-    # como /media/productos/logo.jpg o /static/css/factura.css.
-    # Sin base_url, las imágenes aparecen en blanco en el PDF.
+    # base_url resuelve rutas relativas como /media/... o /static/...
+    # y _url_fetcher_local las lee del disco en vez de pedirlas por HTTP.
     pdf_bytes = weasyprint.HTML(
         string=html_string,
         base_url=request.build_absolute_uri("/"),
+        url_fetcher=_url_fetcher_local,
     ).write_pdf()
 
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
