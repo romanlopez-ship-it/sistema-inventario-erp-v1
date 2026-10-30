@@ -5,7 +5,7 @@ Escritura: crear_venta y VentaDeleteView (W08).
 Exportación PDF: venta_pdf con WeasyPrint (W12).
 """
 
-from datetime import date
+from datetime import date, timezone
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -21,6 +21,7 @@ from .forms import DetalleVentaForm, VentaForm
 from .models import DetalleVenta, Venta
 
 import weasyprint  # Importación local para entorno Docker/Linux
+
 
 class VentaListView(ListView):
     """Lista paginada de ventas en orden cronológico inverso."""
@@ -128,12 +129,11 @@ def venta_pdf(request, venta_id: int) -> HttpResponse:
     context = {
         "venta": venta,
         "config": config,
-        "hoy": date.today(),
+        # "hoy": date.today(),
+        "hoy": timezone.now(),  # ← Permite usar H:i sin lanzar TypeError
     }
 
-    html_string = render_to_string(
-        "ventas/factura_pdf.html", context, request=request
-    )
+    html_string = render_to_string("ventas/factura_pdf.html", context, request=request)
 
     # base_url permite que WeasyPrint encuentre imágenes y archivos estáticos
     # ── WeasyPrint: conversión HTML → PDF ─────────────────────────────
