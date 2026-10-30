@@ -25,3 +25,9 @@ pip-delete-this-directory.txt
 # Herramientas de Sistema
 .DS_Store
 Thumbs.db
+
+# Archivos subidos por usuarios (media)
+media/
+
+# Nunca subir .env (pero sí la plantilla)
+!.env.example
