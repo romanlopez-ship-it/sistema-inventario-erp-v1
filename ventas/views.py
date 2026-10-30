@@ -27,7 +27,7 @@ from configuracion.models import ConfiguracionERP
 from .forms import DetalleVentaForm, VentaForm
 from .models import DetalleVenta, Venta
 
-import weasyprint  # Importación local para entorno Docker/Linux
+# import weasyprint  # Importación local para entorno Docker/Linux
 
 
 class VentaListView(ListView):
@@ -186,6 +186,7 @@ def venta_pdf(request, venta_id: int) -> HttpResponse:
     Returns:
         HttpResponse con Content-Type application/pdf y descarga directa.
     """
+    import weasyprint
 
     venta = get_object_or_404(
         Venta.objects.select_related("cliente").prefetch_related(

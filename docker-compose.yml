@@ -16,7 +16,7 @@ services:
     volumes:
       # PG 18 guarda los datos en /var/lib/postgresql/18/docker:
       # el volumen se monta en /var/lib/postgresql (no en .../data).
-      - postgres18_data:/var/lib/postgresql
+      - postgres18_data:/var/lib/postgresql/
     ports:
       - "127.0.0.1:5432:5432"            # solo accesible desde este equipo
     healthcheck:
