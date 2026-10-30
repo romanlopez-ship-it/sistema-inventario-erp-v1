@@ -359,6 +359,10 @@ dependencia opcional (para fallback o reportes secundarios):
 
 # Motor de PDF de alta calidad (requiere Docker o Linux)
 weasyprint==60.2
+# pydyf 0.11+ cambió la API de PDF() y rompe WeasyPrint 60.x:
+#   TypeError: PDF.__init__() takes 1 positional argument but 3 were given
+# Mantener fijo mientras se use weasyprint==60.2.
+pydyf==0.10.0
 
 # Motor de PDF alternativo sin dependencias nativas (fallback)
 # xhtml2pdf==0.2.15   ← mantener comentado, disponible si se necesita
@@ -370,6 +374,17 @@ weasyprint==60.2
 > Versiones 62+ requieren Python 3.9+ pero pueden cambiar el API de
 > `weasyprint.HTML()`. Si se actualiza, revisar el parámetro `string`
 > vs `filename` en la llamada.
+>
+> **Importante — `pydyf`:** WeasyPrint 60.2 depende de `pydyf` sin límite
+> superior de versión. Si no se fija, `pip` instala la más reciente
+> (0.11 o posterior) y **todas** las facturas fallan con
+> `TypeError: PDF.__init__() takes 1 positional argument but 3 were given`.
+> Por eso se fija `pydyf==0.10.0`.
+>
+> **Codificación:** guardar `requirements.txt` en **UTF-8**. Si se genera con
+> `pip freeze > requirements.txt` en PowerShell 5.1, queda en UTF-16 y los
+> tests de W03 no pueden leerlo. Usar
+> `pip freeze | Out-File -Encoding utf8 requirements.txt`.
 
 ---
 
@@ -385,6 +400,7 @@ docker-compose y en el `buildCommand` de render.yaml.
 # docker-entrypoint.sh
 # Punto de entrada unificado para el contenedor ERP Django.
 # Se ejecuta en LOCAL (docker-compose) y en PRODUCCIÓN (Render).
+# IMPORTANTE: este archivo debe tener finales de línea LF (ver .gitattributes).
 # ─────────────────────────────────────────────────────────────────
 set -e   # detener si cualquier comando falla
 
@@ -397,9 +413,14 @@ python manage.py collectstatic --noinput --clear
 echo "==> [entrypoint] Verificando la configuración de Django..."
 python manage.py check --deploy 2>/dev/null || python manage.py check
 
-echo "==> [entrypoint] Iniciando Gunicorn..."
+# Superusuario de prácticas (fines educativos): se crea solo si no existe,
+# es decir, la primera vez que arranca con una base de datos nueva.
+echo "==> [entrypoint] Verificando y creando superusuario..."
+python manage.py shell -c "from django.contrib.auth import get_user_model; User = get_user_model(); User.objects.filter(username='admin').exists() or User.objects.create_superuser('admin', 'admin@email.com', '12345')"
+
+echo "==> [entrypoint] Iniciando Gunicorn en 0.0.0.0:${PORT:-8000}..."
 exec gunicorn core.wsgi \
-    --bind 0.0.0.0:8000 \
+    --bind 0.0.0.0:${PORT:-8000} \
     --workers 2 \
     --timeout 120 \
     --log-file - \
@@ -415,6 +436,34 @@ chmod +x docker-entrypoint.sh
 :: Verificar el atributo en git para que se preserve en Linux:
 git add docker-entrypoint.sh
 git update-index --chmod=+x docker-entrypoint.sh
+```
+
+> **`$PORT`:** Render indica el puerto con la variable `PORT`. Por eso
+> Gunicorn usa `--bind 0.0.0.0:${PORT:-8000}`: en Render escucha en el
+> puerto que Render asigna y en local usa 8000.
+
+**Finales de línea (Windows → Linux).** Git en Windows suele convertir los
+archivos a CRLF. Un `docker-entrypoint.sh` con CRLF falla en el contenedor
+con `/bin/sh^M: not found` o `exec format error`. Crear `.gitattributes`
+en la raíz del proyecto:
+
+```gitattributes
+# Normaliza finales de línea en el repositorio.
+* text=auto
+# Scripts de shell y archivos que lee Linux: siempre LF (si no, falla en Docker/Render)
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+requirements.txt text eol=lf
+# Binarios
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.webp binary
+*.pdf  binary
+*.docx binary
+*.sqlite3 binary
 ```
 
 ---
@@ -499,19 +548,18 @@ ENTRYPOINT ["./docker-entrypoint.sh"]
 
 ---
 
-## 7. `docker-compose.yml` Completo — Stack Acumulado W18
+## 7. `docker-compose.yml` — Stack de W12 (web + base de datos)
 
-Este archivo incluye **todos los servicios** que el proyecto ha acumulado
-hasta W18 (web, base de datos, Redis, worker Celery, Beat y Flower).
+En W12 el stack tiene solo **web** y **db**. Redis, el worker de Celery,
+Beat y Flower se agregan en W16–W18, cuando exista su código: si se
+declaran antes, esos contenedores no arrancan porque `celery` todavía
+no está en `requirements.txt`.
 
 ```yaml
-# docker-compose.yml — Stack completo ERP Django con WeasyPrint
-# Incluye todos los servicios acumulados hasta W18
-version: '3.9'
-
+# docker-compose.yml — Stack local ERP Django (alcance W12)
+# Celery worker/beat, Flower y Redis se agregan en W16+ (aún no hay código).
 services:
 
-  # ── PostgreSQL ─────────────────────────────────────────────────
   db:
     image: postgres:15-alpine
     restart: unless-stopped
@@ -529,25 +577,11 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Redis (broker Celery + caché Django) ───────────────────────
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  # ── Aplicación Django (con WeasyPrint) ─────────────────────────
   web:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    # ENTRYPOINT ya definido en Dockerfile → aquí no se necesita command
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
@@ -557,80 +591,11 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      redis:
-        condition: service_healthy
     env_file:
       - .env
     environment:
       DJANGO_SETTINGS_MODULE: core.settings_prod
-      DATABASE_URL:   postgresql://${POSTGRES_USER:-erp_user}:${POSTGRES_PASSWORD:-erp_pass_local}@db:5432/${POSTGRES_DB:-erp_db}
-      REDIS_URL:      redis://redis:6379/0
-      REDIS_CACHE_URL: redis://redis:6379/1
-
-  # ── Celery Worker ──────────────────────────────────────────────
-  celery_worker:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    # Sobreescribir el entrypoint del Dockerfile para esta imagen
-    entrypoint: []
-    command: celery -A core worker -l info -Q erp_django
-    volumes:
-      - .:/app
-      - media_volume:/app/media   # necesita acceso a media para exportaciones
-    depends_on:
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      DJANGO_SETTINGS_MODULE: core.settings_prod
-      DATABASE_URL:   postgresql://${POSTGRES_USER:-erp_user}:${POSTGRES_PASSWORD:-erp_pass_local}@db:5432/${POSTGRES_DB:-erp_db}
-      REDIS_URL:      redis://redis:6379/0
-
-  # ── Celery Beat (scheduler) ────────────────────────────────────
-  celery_beat:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    entrypoint: []
-    command: celery -A core beat -l info
-    volumes:
-      - .:/app
-    depends_on:
-      redis:
-        condition: service_healthy
-      db:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      DJANGO_SETTINGS_MODULE: core.settings_prod
-      DATABASE_URL:   postgresql://${POSTGRES_USER:-erp_user}:${POSTGRES_PASSWORD:-erp_pass_local}@db:5432/${POSTGRES_DB:-erp_db}
-      REDIS_URL:      redis://redis:6379/0
-
-  # ── Flower (monitor Celery) ────────────────────────────────────
-  flower:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    entrypoint: []
-    command: celery -A core flower --port=5555
-    ports:
-      - "5555:5555"
-    depends_on:
-      - redis
-      - celery_worker
-    env_file:
-      - .env
-    environment:
-      DJANGO_SETTINGS_MODULE: core.settings_prod
-      REDIS_URL:      redis://redis:6379/0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-erp_user}:${POSTGRES_PASSWORD:-erp_pass_local}@db:5432/${POSTGRES_DB:-erp_db}
 
 volumes:
   postgres_data:
@@ -676,13 +641,9 @@ docker-compose ps
 
 **Resultado esperado:**
 ```
-NAME                  SERVICE         STATUS          PORTS
-erp-db-1              db              running         0.0.0.0:5432->5432/tcp
-erp-redis-1           redis           running         0.0.0.0:6379->6379/tcp
-erp-web-1             web             running         0.0.0.0:8000->8000/tcp
-erp-celery_worker-1   celery_worker   running
-erp-celery_beat-1     celery_beat     running
-erp-flower-1          flower          running         0.0.0.0:5555->5555/tcp
+NAME        SERVICE   STATUS    PORTS
+erp-db-1    db        running   0.0.0.0:5432->5432/tcp
+erp-web-1   web       running   0.0.0.0:8000->8000/tcp
 ```
 
 ### 8.3 Verificar que WeasyPrint tiene acceso a todas sus librerías
@@ -723,8 +684,9 @@ Operations to perform: Apply all migrations...
 ...OK
 ==> [entrypoint] Recolectando archivos estáticos...
 ...
-==> [entrypoint] Iniciando Gunicorn...
-[INFO] Listening at: http://0.0.0.0:8000
+==> [entrypoint] Verificando y creando superusuario...
+==> [entrypoint] Iniciando Gunicorn en 0.0.0.0:10000...
+[INFO] Listening at: http://0.0.0.0:10000      ← el puerto lo asigna Render ($PORT)
 ```
 
 ---
@@ -782,7 +744,7 @@ docker-compose exec web cat docker-entrypoint.sh
 
 Confirmar que la última línea usa exactamente:
 ```bash
-exec gunicorn core.wsgi --bind 0.0.0.0:8000 ...
+exec gunicorn core.wsgi --bind 0.0.0.0:${PORT:-8000} ...
 ```
 
 > **Error común #4:** cambiar `--bind 0.0.0.0:8000` por
@@ -936,7 +898,7 @@ equipo, no del proyecto — repasar la Sección 2 completa desde el inicio.
 ```
 [ ] docker-compose ps → todos los servicios en "Up", ninguno "Restarting"
 [ ] docker-compose exec web curl -I http://localhost:8000/ → responde 200/302
-[ ] docker-entrypoint.sh usa --bind 0.0.0.0:8000 (no 127.0.0.1)
+[ ] docker-entrypoint.sh usa --bind 0.0.0.0:${PORT:-8000} (no 127.0.0.1)
 [ ] Probado tanto http://localhost:8000 como http://127.0.0.1:8000
 [ ] wsl -l -v muestra docker-desktop y docker-desktop-data en VERSION 2
 [ ] wsl --shutdown + reabrir Docker Desktop ejecutado al menos una vez
@@ -983,6 +945,15 @@ con las librerías correctas.
 
 ### 9.2 Reemplazar `ventas/templates/ventas/factura_pdf.html`
 
+> **Limitaciones de WeasyPrint 60.x que afectan a esta plantilla:**
+> - `var(--color)` dentro de propiedades abreviadas (`border`, `background`)
+>   se descarta con el aviso `Ignored ... invalid value`: la factura sale sin
+>   colores ni bordes. Por eso los colores van escritos directamente.
+> - `gap` no se reconoce (`unknown property`); se usan márgenes.
+> - La imagen Docker no trae fuente de emojis; no usar emojis en el PDF.
+> - `{% widthratio %}` redondea a entero: el IVA y el TOTAL se calculan en
+>   la vista con `Decimal` (Sección 10.2).
+
 ```html
 <!DOCTYPE html>
 <html lang="es">
@@ -990,15 +961,11 @@ con las librerías correctas.
     <meta charset="UTF-8">
     <title>Factura {{ pedido.numero_pedido|default:venta.pk }}</title>
     <style>
-        /* ── Variables de color Fable 5 AzulERP ──────────────────── */
-        :root {
-            --navy:  #0A2342;
-            --gold:  #B8860B;
-            --sky:   #4A90D9;
-            --ice:   #E8F0FB;
-            --muted: #5A6A7E;
-            --text:  #1A1A2E;
-        }
+        /* ── Paleta Fable 5 AzulERP ─────────────────────────────────
+           WeasyPrint 60.x no resuelve var() dentro de propiedades
+           abreviadas (border, background), así que los colores van fijos:
+           navy #0A2342 · gold #B8860B · sky #4A90D9 · ice #E8F0FB
+           muted #5A6A7E · text #1A1A2E                              */
 
         /* ── Configuración de página ──────────────────────────────── */
         @page {
@@ -1042,7 +1009,7 @@ con las librerías correctas.
         body {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 10.5pt;
-            color: var(--text);
+            color: #1A1A2E;
             line-height: 1.5;
         }
 
@@ -1051,31 +1018,30 @@ con las librerías correctas.
             position: running(header-running);
             display: flex;
             align-items: center;
-            gap: 12px;
-            border-bottom: 2px solid var(--gold);
+            border-bottom: 2px solid #B8860B;
             padding-bottom: .3cm;
         }
-        #header-running .empresa { font-weight: bold; color: var(--navy); }
-        #header-running .folio   { margin-left: auto; color: var(--gold); font-weight: bold; }
+        #header-running .empresa { font-weight: bold; margin-right: 12px; color: #0A2342; }
+        #header-running .folio   { margin-left: auto; color: #B8860B; font-weight: bold; }
 
         /* String para el pie izquierdo */
         #empresa-string { string-set: empresa-nombre content(); }
 
         /* ── ENCABEZADO (primera página) ───────────────────────────── */
         .header {
-            background: var(--navy);
+            background: #0A2342;
             color: #FFFFFF;
             padding: 18px 24px;
-            border-bottom: 4px solid var(--gold);
+            border-bottom: 4px solid #B8860B;
             margin-bottom: 20px;
             display: flex;
             align-items: center;
-            gap: 16px;
         }
         .header-logo {
             width: 64px;
             height: 64px;
             object-fit: contain;
+            margin-right: 16px;
             border-radius: 8px;
             background: rgba(255,255,255,.08);
         }
@@ -1087,16 +1053,17 @@ con las librerías correctas.
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
+            font-size: 18px;
+            margin-right: 16px;
         }
-        .header-title { font-size: 22pt; font-weight: bold; color: var(--gold); }
+        .header-title { font-size: 22pt; font-weight: bold; color: #B8860B; }
         .header-empresa { color: rgba(255,255,255,.78); font-size: 10pt; margin-top: 2px; }
         .header-folio {
             margin-left: auto;
             text-align: right;
         }
-        .header-folio .folio-num { font-size: 15pt; font-weight: bold; color: var(--gold); }
-        .header-folio .folio-fecha { color: rgba(255,255,255,.68); font-size: 9pt; }
+        .header-folio .folio-num { font-size: 15pt; font-weight: bold; color: #B8860B; }
+        .header-folio .folio-fech { color: rgba(255,255,255,.68); font-size: 9pt; }
 
         /* ── SECCIÓN DE DATOS DEL CLIENTE ──────────────────────────── */
         .datos-section { margin-bottom: 18px; }
@@ -1107,12 +1074,12 @@ con las librerías correctas.
         .datos-tabla td {
             padding: 5px 9px;
             font-size: 9.5pt;
-            border: 1px solid var(--ice);
+            border: 1px solid #E8F0FB;
         }
         .datos-tabla .lbl {
-            background: var(--ice);
+            background: #E8F0FB;
             font-weight: bold;
-            color: var(--navy);
+            color: #0A2342;
             width: 28%;
         }
 
@@ -1129,20 +1096,20 @@ con las librerías correctas.
         tfoot { display: table-footer-group; }
 
         .productos-tabla thead th {
-            background: var(--navy);
+            background: #0A2342;
             color: #FFFFFF;
             padding: 8px 11px;
             font-size: 9pt;
             text-align: left;
             text-transform: uppercase;
             letter-spacing: .04em;
-            border-bottom: 3px solid var(--gold);
+            border-bottom: 3px solid #B8860B;
         }
         .productos-tabla thead th.num { text-align: right; }
         .productos-tabla tbody td {
             padding: 7px 11px;
             font-size: 9.5pt;
-            border-bottom: 1px solid var(--ice);
+            border-bottom: 1px solid #E8F0FB;
             /* Evitar cortar una fila entre dos páginas */
             page-break-inside: avoid;
         }
@@ -1155,30 +1122,30 @@ con las librerías correctas.
         .total-tabla td {
             padding: 6px 10px;
             font-size: 9.5pt;
-            border: 1px solid var(--ice);
+            border: 1px solid #E8F0FB;
         }
         .total-tabla .lbl {
-            background: var(--ice);
+            background: #E8F0FB;
             font-weight: bold;
-            color: var(--navy);
+            color: #0A2342;
         }
         .total-tabla .val { text-align: right; }
         .total-tabla tr.final td {
             background: #FDF8E8;
-            border-top: 2px solid var(--gold);
+            border-top: 2px solid #B8860B;
             font-weight: bold;
             font-size: 11.5pt;
         }
-        .total-tabla .val.gold { color: var(--gold); font-size: 12.5pt; }
+        .total-tabla .val.gold { color: #B8860B; font-size: 12.5pt; }
 
         /* ── NOTA LEGAL / PIE ─────────────────────────────────────── */
         .nota {
             margin-top: 24px;
             padding: 12px 16px;
-            border-left: 4px solid var(--sky);
+            border-left: 4px solid #4A90D9;
             background: #F5F9FF;
             font-size: 8.5pt;
-            color: var(--muted);
+            color: #5A6A7E;
             /* No cortar la nota entre páginas */
             page-break-inside: avoid;
         }
@@ -1192,7 +1159,7 @@ con las librerías correctas.
 -->
 <div id="header-running">
     <span class="empresa">{{ config.nombre_empresa }}</span>
-    {% if config.rfc %}<span style="color:var(--muted);font-size:8.5pt;">RFC: {{ config.rfc }}</span>{% endif %}
+    {% if config.rfc %}<span style="color:#5A6A7E;font-size:8.5pt;">RFC: {{ config.rfc }}</span>{% endif %}
     <span class="folio">Factura #{{ venta.pk|stringformat:"05d" }}</span>
 </div>
 
@@ -1208,7 +1175,7 @@ con las librerías correctas.
         -->
         <img class="header-logo" src="{{ config.logo.url }}" alt="Logo">
     {% else %}
-        <div class="header-logo-placeholder">📦</div>
+        <div class="header-logo-placeholder">ERP</div>
     {% endif %}
 
     <div>
@@ -1221,8 +1188,7 @@ con las librerías correctas.
 
     <div class="header-folio">
         <div class="folio-num"># {{ venta.pk|stringformat:"05d" }}</div>
-        <div class="folio-fecha">{{ venta.fecha|date:"d/m/Y" }}</div>
-        <div class="folio-fecha">{{ venta.fecha|date:"H:i" }} h</div>
+        <div class="folio-fech"> {{ venta.fecha|date:"d/m/Y" }}</div>
     </div>
 </div>
 
@@ -1243,7 +1209,7 @@ con las librerías correctas.
         </tr>
         <tr>
             <td class="lbl">Fecha de emisión</td>
-            <td>{{ venta.fecha|date:"d/m/Y H:i" }}</td>
+            <td>{{ venta.fecha|date:"d/m/Y" }}</td>
             <td class="lbl">IVA</td>
             <td>{{ config.iva_porcentaje }}%</td>
         </tr>
@@ -1272,7 +1238,7 @@ con las librerías correctas.
         </tr>
         {% empty %}
         <tr>
-            <td colspan="5" style="text-align:center;padding:16px;color:var(--muted);">
+            <td colspan="5" style="text-align:center;padding:16px;color:#5A6A7E;">
                 Sin líneas de detalle registradas.
             </td>
         </tr>
@@ -1283,22 +1249,19 @@ con las librerías correctas.
 <!-- ── TOTALES ───────────────────────────────────────────────────── -->
 <div class="total-section">
     <table class="total-tabla">
-        {% with subtotal=venta.total iva_pct=config.iva_porcentaje %}
+        {# subtotal, iva y total_con_iva vienen calculados desde la vista #}
         <tr>
             <td class="lbl">Subtotal (sin IVA)</td>
             <td class="val">${{ subtotal }}</td>
         </tr>
         <tr>
-            <td class="lbl">IVA ({{ iva_pct }}%)</td>
-            <td class="val">
-                ${% widthratio subtotal 100 iva_pct %}
-            </td>
+            <td class="lbl">IVA ({{ config.iva_porcentaje }}%)</td>
+            <td class="val">${{ iva }}</td>
         </tr>
         <tr class="final">
             <td class="lbl" style="font-size:11.5pt;">TOTAL</td>
-            <td class="val gold">${{ subtotal }}</td>
+            <td class="val gold">${{ total_con_iva }}</td>
         </tr>
-        {% endwith %}
     </table>
 </div>
 
@@ -1307,7 +1270,7 @@ con las librerías correctas.
     <strong>Nota:</strong> Este documento es una representación de la factura generada por
     el sistema ERP Django de {{ config.nombre_empresa }}.
     {% if config.rfc %}RFC: {{ config.rfc }}.{% endif %}
-    Generado el {{ hoy|date:"d/m/Y \a \l\a\s H:i" }} h.
+    Generado el {{ hoy|date:"d/m/Y" }}.
 </div>
 
 </body>
@@ -1328,7 +1291,8 @@ pisa.CreatePDF(src=html_string, dest=buffer)
 # Sin base_url, los <img src="/media/productos/logo.jpg"> no se encuentran
 weasyprint.HTML(
     string=html_string,
-    base_url=request.build_absolute_uri('/')   # → 'http://localhost:8000/'
+    base_url=request.build_absolute_uri('/'),  # → 'https://mi-app.onrender.com/'
+    url_fetcher=_url_fetcher_local,            # lee /static/ y /media/ desde disco
 ).write_pdf()
 ```
 
@@ -1336,67 +1300,136 @@ weasyprint.HTML(
 (ej: `http://localhost:8000/`). WeasyPrint la usa como base para
 resolver todas las rutas relativas de imágenes en el HTML.
 
+Sin `url_fetcher`, WeasyPrint **descarga por HTTP** cada imagen desde el
+mismo servidor que está generando el PDF. Con 2 workers de Gunicorn eso es
+lento y puede bloquearse, y si el logo se perdió (el disco de Render se
+borra en cada deploy) la petición falla. `_url_fetcher_local` lee esos
+archivos directamente del disco y, si no existen, WeasyPrint solo omite
+la imagen.
+
 ---
 
 ### 10.2 Reemplazar la vista `venta_pdf` en `ventas/views.py`
 
 ```python
-# ventas/views.py — reemplazar la función venta_pdf completa:
+# ventas/views.py — imports necesarios (además de los existentes):
+import mimetypes
+from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
+from django.contrib.auth.decorators import login_required
+from django.contrib.staticfiles import finders
+from django.http.request import validate_host
+from django.utils import timezone
+
+import weasyprint
+
+
+# ventas/views.py — agregar las funciones auxiliares y reemplazar venta_pdf:
+
+def _ruta_local(url_path: str) -> Path | None:
+    """Traduce /static/... o /media/... a un archivo en disco (o None)."""
+    static_prefix = "/" + settings.STATIC_URL.lstrip("/")
+    media_prefix = "/" + settings.MEDIA_URL.lstrip("/")
+
+    if url_path.startswith(static_prefix):
+        relativa = url_path[len(static_prefix):]
+        candidata = Path(settings.STATIC_ROOT) / relativa
+        if candidata.is_file():
+            return candidata
+        encontrada = finders.find(relativa)  # útil en desarrollo, sin collectstatic
+        return Path(encontrada) if encontrada else None
+
+    if url_path.startswith(media_prefix):
+        raiz = Path(settings.MEDIA_ROOT).resolve()
+        candidata = (raiz / url_path[len(media_prefix):]).resolve()
+        # Evita salir de MEDIA_ROOT con rutas tipo ../
+        if raiz in candidata.parents and candidata.is_file():
+            return candidata
+    return None
+
+
+def _url_fetcher_local(url: str, timeout: int = 10, ssl_context=None):
+    """url_fetcher de WeasyPrint que lee /static/ y /media/ desde disco.
+
+    Evita que WeasyPrint haga peticiones HTTP al propio servidor (lento y
+    puede bloquear a los workers de Gunicorn). Si el archivo no existe
+    (p. ej. un logo perdido por el disco efímero de Render), se lanza
+    FileNotFoundError: WeasyPrint solo registra un aviso y omite la imagen.
+    Las URLs externas (p. ej. media en S3) usan el fetcher por defecto.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme in ("http", "https", "file"):
+        ruta = _ruta_local(unquote(parsed.path))
+        if ruta is not None:
+            return {
+                "string": ruta.read_bytes(),
+                "mime_type": mimetypes.guess_type(ruta.name)[0],
+                "filename": ruta.name,
+            }
+        propio = validate_host(
+            parsed.hostname or "", ["localhost", "127.0.0.1", *settings.ALLOWED_HOSTS]
+        )
+        if parsed.scheme == "file" or propio:
+            raise FileNotFoundError(url)
+    return weasyprint.default_url_fetcher(url, timeout=timeout, ssl_context=ssl_context)
+
+
+def calcular_totales(subtotal, iva_porcentaje) -> dict:
+    """Subtotal, IVA y total con 2 decimales (redondeo comercial).
+
+    Venta.total es la suma de las líneas SIN IVA; el IVA se suma aparte.
+    Ejemplo: calcular_totales(Decimal("3000"), Decimal("16"))
+             -> subtotal 3000.00, iva 480.00, total 3480.00
+    """
+    centavos = Decimal("0.01")
+    subtotal = Decimal(subtotal).quantize(centavos, ROUND_HALF_UP)
+    iva = (subtotal * Decimal(iva_porcentaje) / 100).quantize(centavos, ROUND_HALF_UP)
+    return {"subtotal": subtotal, "iva": iva, "total_con_iva": subtotal + iva}
+
 
 @login_required
 def venta_pdf(request, venta_id: int) -> HttpResponse:
     """Genera y descarga la factura de una venta en formato PDF.
 
-    Motor: WeasyPrint (requiere Docker o Linux con libpango/cairo/gdk-pixbuf).
-    Alternativa de entorno sin Docker: ver Guía W12 original con xhtml2pdf.
+    Motor: WeasyPrint (requiere entorno Linux o contenedor Docker).
 
     Args:
-        request:  HttpRequest de Django.
+        request: HttpRequest de Django.
         venta_id: ID de la venta a generar.
 
     Returns:
         HttpResponse con Content-Type application/pdf y descarga directa.
-
-    Raises:
-        Http404: si la venta no existe.
     """
-    import weasyprint   # import local: solo disponible en Docker/Linux
-
-    from datetime import date
-    from django.template.loader import render_to_string
-    from configuracion.models  import ConfiguracionERP
 
     venta = get_object_or_404(
-        Venta.objects
-        .select_related('cliente')
-        .prefetch_related('detalles__producto__categoria'),
-        pk=venta_id
+        Venta.objects.select_related("cliente").prefetch_related(
+            "detalles__producto__categoria"
+        ),
+        pk=venta_id,
     )
-
-    config  = ConfiguracionERP.get_instance()
+    config = ConfiguracionERP.get_instance()
     context = {
-        'venta':  venta,
-        'config': config,
-        'hoy':    date.today(),
+        "venta": venta,
+        "config": config,
+        "hoy": timezone.localdate(),  # fecha en TIME_ZONE (America/Mexico_City)
+        **calcular_totales(venta.total, config.iva_porcentaje),
     }
 
-    html_string = render_to_string(
-        'ventas/factura_pdf.html',
-        context,
-        request=request   # necesario para template tags que usen request
-    )
+    html_string = render_to_string("ventas/factura_pdf.html", context, request=request)
 
     # ── WeasyPrint: conversión HTML → PDF ─────────────────────────────
-    # base_url: permite que WeasyPrint encuentre imágenes relativas
-    # como /media/productos/logo.jpg o /static/css/factura.css.
-    # Sin base_url, las imágenes aparecen en blanco en el PDF.
+    # base_url resuelve rutas relativas como /media/... o /static/...
+    # y _url_fetcher_local las lee del disco en vez de pedirlas por HTTP.
     pdf_bytes = weasyprint.HTML(
-        string   = html_string,
-        base_url = request.build_absolute_uri('/'),
+        string=html_string,
+        base_url=request.build_absolute_uri("/"),
+        url_fetcher=_url_fetcher_local,
     ).write_pdf()
 
-    response = HttpResponse(pdf_bytes, content_type='application/pdf')
-    response['Content-Disposition'] = (
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = (
         f'attachment; filename="factura_{venta.pk:05d}.pdf"'
     )
     return response
@@ -1461,28 +1494,34 @@ start C:\Temp\prueba_weasyprint.pdf
 
 ### 12.1 Migrar `render.yaml` de Buildpack a Docker
 
-El `render.yaml` original usaba `env: python` (Render Buildpack).
-Para usar el Dockerfile con las dependencias nativas, se migra a
-`env: docker`.
+El `render.yaml` original usaba el buildpack de Python. Para usar el
+Dockerfile con las dependencias nativas, se migra a `runtime: docker`
+(`env: docker` es el nombre anterior de la misma opción).
+
+En W12 el Blueprint declara solo el servicio web y PostgreSQL. Redis y
+los workers de Celery se agregan en W16+; Render no ofrece plan gratuito
+para *background workers*.
 
 ```yaml
-# render.yaml — versión con Docker (reemplaza la versión buildpack)
-services:
+# render.yaml — Blueprint de Render (alcance W12: web Docker + PostgreSQL)
+# Documentación: https://render.com/docs/blueprint-spec
+#
+# Fuera de alcance hasta su semana (no tienen código todavía):
+#   W13+  Stripe / SendGrid (variables de entorno)
+#   W16+  Redis, Celery worker/beat, Flower
+#         Nota: Render NO tiene plan gratuito para background workers.
 
-  # ── Aplicación Web Django ──────────────────────────────────────
+services:
   - type: web
-    name: erp-django-utec
-    env: docker                          # ← CAMBIO CLAVE vs buildpack
-    dockerfilePath: ./Dockerfile         # ruta al Dockerfile en el repo
-    dockerContext: .                     # contexto de build (raíz del repo)
+    name: erp-django-utec            # debe coincidir con el servicio en Render
+    runtime: docker                 # imagen con Pango/Cairo para WeasyPrint
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: free
     region: oregon
-
-    # ENTRYPOINT ya definido en Dockerfile → no se necesita buildCommand
-    # render.yaml no necesita startCommand; usa el ENTRYPOINT del Dockerfile
-
-    healthCheckPath: /
-
+    healthCheckPath: /              # pública; responde sin login
+    # El ENTRYPOINT del Dockerfile migra, recolecta estáticos y arranca
+    # Gunicorn en 0.0.0.0:$PORT, así que no hace falta startCommand.
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: core.settings_prod
@@ -1490,36 +1529,13 @@ services:
         generateValue: true
       - key: DEBUG
         value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
       - key: DATABASE_URL
         fromDatabase:
           name: erp-django-db
           property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: erp-django-redis
-          property: connectionString
-      - key: REDIS_CACHE_URL
-        fromService:
-          type: redis
-          name: erp-django-redis
-          property: connectionString
-        # Nota: en producción ideal usar una segunda instancia Redis
-        # para separar broker y caché. En el plan gratuito, se usa la misma.
-      - key: ALLOWED_HOSTS
-        value: ".onrender.com"
-      - key: STRIPE_SECRET_KEY
-        sync: false
-      - key: STRIPE_PUBLISHABLE_KEY
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET
-        sync: false
-      - key: SENDGRID_API_KEY
-        sync: false
-      - key: DEFAULT_FROM_EMAIL
-        value: "ERP Django <noreply@erp-django.com>"
-      - key: ADMIN_EMAIL
-        sync: false
+      # Media en S3 (W11, opcional). Sin bucket se usa el disco efímero.
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
@@ -1527,67 +1543,23 @@ services:
       - key: AWS_STORAGE_BUCKET_NAME
         sync: false
 
-  # ── Celery Worker ──────────────────────────────────────────────
-  - type: worker
-    name: erp-django-celery-worker
-    env: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    plan: free
-    startCommand: celery -A core worker -l info -Q erp_django
-    envVars:
-      - key: DJANGO_SETTINGS_MODULE
-        value: core.settings_prod
-      - key: DATABASE_URL
-        fromDatabase:
-          name: erp-django-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: erp-django-redis
-          property: connectionString
-      - key: SENDGRID_API_KEY
-        sync: false
-
-  # ── Celery Beat ────────────────────────────────────────────────
-  - type: worker
-    name: erp-django-celery-beat
-    env: docker
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    plan: free
-    numInstances: 1    # CRÍTICO: el Beat scheduler solo debe tener 1 instancia
-    startCommand: celery -A core beat -l info
-    envVars:
-      - key: DJANGO_SETTINGS_MODULE
-        value: core.settings_prod
-      - key: DATABASE_URL
-        fromDatabase:
-          name: erp-django-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: erp-django-redis
-          property: connectionString
-
-  # ── Base de Datos ──────────────────────────────────────────────
 databases:
   - name: erp-django-db
     plan: free
     region: oregon
     databaseName: erp_db
     user: erp_user
-
-  # ── Redis ──────────────────────────────────────────────────────
-  - name: erp-django-redis
-    type: redis
-    plan: free
-    region: oregon
 ```
 
 ---
+
+> **Proxy HTTPS de Render.** Render recibe HTTPS y reenvía la petición al
+> contenedor por HTTP con la cabecera `X-Forwarded-Proto`. Agregar en
+> `core/settings_prod.py`, junto a `SECURE_SSL_REDIRECT`:
+>
+> ```python
+> SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+> ```
 
 ### 12.2 Push y despliegue automático
 
@@ -1612,7 +1584,7 @@ Render detecta el push automáticamente y:
 ```
 ==> Building Docker image...
 Step X: RUN apt-get install -y ... libpango-1.0-0 libcairo2 ...
-Step X: RUN pip install ... weasyprint==60.2
+Step X: RUN pip install ... weasyprint==60.2 ... pydyf-0.10.0
 ==> Build successful
 
 ==> Starting service with Dockerfile entrypoint...
@@ -1760,6 +1732,37 @@ Verificar que no se heredó base.html (que sí carga Bootstrap del CDN).
 
 ---
 
+**Error 8: `TypeError: PDF.__init__() takes 1 positional argument but 3 were given`**
+
+```
+File ".../weasyprint/pdf/__init__.py", line 127, in generate_pdf
+    pdf = pydyf.PDF((version or '1.7'), identifier)
+TypeError: PDF.__init__() takes 1 positional argument but 3 were given
+```
+
+**Causa:** se instaló `pydyf` 0.11 o posterior, que cambió la API usada
+por WeasyPrint 60.x. Ocurre si `requirements.txt` no fija `pydyf`.
+
+**Diagnóstico:**
+```cmd
+docker-compose exec web pip show pydyf
+```
+
+**Solución:** agregar `pydyf==0.10.0` a `requirements.txt` (Sección 4) y
+reconstruir con `docker-compose build web`. En Render basta con hacer push.
+
+---
+
+**Error 9: logs llenos de `weasyprint: Ignored ... var(--gold) ... invalid value`**
+
+**Causa:** WeasyPrint 60.x no resuelve `var()` dentro de propiedades
+abreviadas como `border` o `background`; las reglas se descartan y la
+factura sale sin colores ni bordes.
+
+**Solución:** escribir los colores directamente (plantilla de la Sección 9.2).
+
+---
+
 ## 14. Tests del PDF — Ejecutados dentro del Contenedor Docker
 
 ### 14.1 ¿Por qué ejecutar los tests dentro del contenedor?
@@ -1769,11 +1772,24 @@ de aula (USB Windows). Ejecutar los tests en el host fallaría con
 `ImportError: No module named 'weasyprint'` o
 `OSError: no library called "cairo" was found`.
 
-La solución es ejecutar los tests **dentro** del contenedor:
+La solución es ejecutar los tests **dentro** del contenedor.
+
+> **Usar `core.settings` para los tests.** El servicio `web` arranca con
+> `core.settings_prod`, que activa `SECURE_SSL_REDIRECT`: el cliente de
+> pruebas usa HTTP y casi todas las vistas responderían 301 en lugar de
+> 200/302. Por eso cada comando agrega
+> `-e DJANGO_SETTINGS_MODULE=core.settings`.
+
+> **Pruebas de regresión del PDF.** `tests/test_w12_pdf.py` cubre el
+> comportamiento esperado de `/ventas/<id>/pdf/`: 302 sin login, 404 si la
+> venta no existe, 200 con `application/pdf` y contenido que empieza con
+> `%PDF`, un logo inexistente que no rompe el PDF, y el TOTAL con IVA.
+
+
 
 ```cmd
 :: Ejecutar tests específicos de PDF dentro del contenedor web
-docker-compose exec web python manage.py test tests.test_w12_documentos --verbosity=2
+docker-compose exec -e DJANGO_SETTINGS_MODULE=core.settings web python manage.py test tests.test_w12_documentos tests.test_w12_pdf --verbosity=2
 ```
 
 ### 14.2 Actualizar `tests/test_w12_documentos.py`
@@ -1785,7 +1801,7 @@ IMPORTANTE: Estos tests deben ejecutarse dentro del contenedor Docker
 donde WeasyPrint y sus dependencias nativas están disponibles.
 
 Ejecutar con:
-    docker-compose exec web python manage.py test tests.test_w12_documentos --verbosity=2
+    docker-compose exec -e DJANGO_SETTINGS_MODULE=core.settings web python manage.py test tests.test_w12_documentos tests.test_w12_pdf --verbosity=2
 
 NO ejecutar directamente en el host Windows (faltarán las librerías nativas).
 
@@ -1902,13 +1918,13 @@ class VentaPDFWeasyPrintTest(TestCase):
 
 ```cmd
 :: Suite completa
-docker-compose exec web python manage.py test tests --verbosity=0
+docker-compose exec -e DJANGO_SETTINGS_MODULE=core.settings web python manage.py test tests --verbosity=0
 
 :: Solo los tests de PDF
-docker-compose exec web python manage.py test tests.test_w12_documentos --verbosity=2
+docker-compose exec -e DJANGO_SETTINGS_MODULE=core.settings web python manage.py test tests.test_w12_documentos tests.test_w12_pdf --verbosity=2
 
 :: Con cobertura de código (si coverage está instalado)
-docker-compose exec web coverage run manage.py test tests
+docker-compose exec -e DJANGO_SETTINGS_MODULE=core.settings web coverage run manage.py test tests
 docker-compose exec web coverage report
 ```
 
@@ -1944,12 +1960,14 @@ que la Guía W13 verifica en su arranque.
 
 ```
 [ ] docker-entrypoint.sh creado con chmod +x y git update-index --chmod=+x
+[ ] .gitattributes con *.sh text eol=lf (entrypoint con LF, no CRLF)
+[ ] requirements.txt en UTF-8 con weasyprint==60.2 y pydyf==0.10.0
 [ ] Dockerfile multicapa: base → system-deps → python-deps → app
 [ ] apt-get instala los 8+ paquetes requeridos por WeasyPrint
 [ ] libpango-1.0-0 + libpangoft2 + libpangocairo + libcairo2 + libgdk-pixbuf
 [ ] fonts-liberation + fonts-dejavu-core para tipografía PDF
 [ ] libjpeg, libpng, libwebp para Pillow (imágenes en Django)
-[ ] docker-compose.yml: servicios web + db + redis + worker + beat + flower
+[ ] docker-compose.yml: servicios web + db (Redis/Celery/Flower llegan en W16+)
 [ ] docker-compose build --no-cache web → build exitoso sin errores
 [ ] docker-compose up -d → todos los servicios en STATUS: running (no Restarting)
 [ ] docker-compose exec web curl -I http://localhost:8000/ → responde 200/302
@@ -1978,10 +1996,12 @@ que la Guía W13 verifica en su arranque.
 ### Despliegue a Render
 
 ```
-[ ] render.yaml migrado de env:python a env:docker
+[ ] render.yaml migrado del buildpack de Python a runtime: docker
 [ ] dockerfilePath: ./Dockerfile
-[ ] Celery worker y beat también usan env:docker
-[ ] numInstances: 1 en celery_beat
+[ ] healthCheckPath: / y solo web + PostgreSQL en render.yaml (W12)
+[ ] SECURE_PROXY_SSL_HEADER en core/settings_prod.py
+[ ] Logs de Render: sin "TypeError: PDF.__init__()" ni "weasyprint: Ignored"
+[ ] /ventas/1/pdf/ sin sesión → 302 a /accounts/login/
 [ ] git push main → build Docker automático en Render
 [ ] Logs de Render: "apt-get install ... libpango-1.0-0 ... OK"
 [ ] Logs de Render: "pip install ... weasyprint==60.2 ... OK"
