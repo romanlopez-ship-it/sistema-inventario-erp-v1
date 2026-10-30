@@ -129,8 +129,8 @@ def venta_pdf(request, venta_id: int) -> HttpResponse:
     context = {
         "venta": venta,
         "config": config,
-        # "hoy": date.today(),
-        "hoy": timezone.now(),  # ← Permite usar H:i sin lanzar TypeError
+        "hoy": date.today(),
+        #"hoy": timezone.now(),  # ← Permite usar H:i sin lanzar TypeError
     }
 
     html_string = render_to_string("ventas/factura_pdf.html", context, request=request)
