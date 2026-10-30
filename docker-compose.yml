@@ -1,20 +1,27 @@
-# docker-compose.yml — Stack local ERP Django (alcance W12)
+# docker-compose.yml — Stack local ERP Django (alcance W12). SOLO DESARROLLO.
+# Render NO usa este archivo (usa Dockerfile + variables del dashboard).
 # Celery worker/beat, Flower y Redis se agregan en W16+ (aún no hay código).
+#
+# Credenciales locales: se leen de .env; si faltan o están vacías se usan
+# los valores por defecto (admin / 12345 / erp_db). Ver .env.example.
 services:
 
   db:
-    image: postgres:15-alpine
+    image: postgres:18-alpine            # misma versión mayor que Render
     restart: unless-stopped
     environment:
       POSTGRES_DB:       ${POSTGRES_DB:-erp_db}
-      POSTGRES_USER:     ${POSTGRES_USER:-erp_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-erp_pass_local}
+      POSTGRES_USER:     ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-12345}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # PG 18 guarda los datos en /var/lib/postgresql/18/docker:
+      # el volumen se monta en /var/lib/postgresql (no en .../data).
+      - postgres18_data:/var/lib/postgresql
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"            # solo accesible desde este equipo
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-erp_user}"]
+      # $$ = se evalúa dentro del contenedor
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -25,21 +32,22 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     volumes:
-      - .:/app
+      - .:/app                           # docker-entrypoint.sh debe tener LF
       - static_volume:/app/staticfiles
       - media_volume:/app/media
     ports:
-      - "8000:8000"
+      - "8000:8000"                      # Gunicorn escucha en 0.0.0.0:8000
     depends_on:
       db:
         condition: service_healthy
     env_file:
       - .env
     environment:
+      # environment: tiene prioridad sobre env_file:
       DJANGO_SETTINGS_MODULE: core.settings_prod
-      DATABASE_URL: postgresql://${POSTGRES_USER:-erp_user}:${POSTGRES_PASSWORD:-erp_pass_local}@db:5432/${POSTGRES_DB:-erp_db}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-12345}@db:5432/${POSTGRES_DB:-erp_db}
 
 volumes:
-  postgres_data:
+  postgres18_data:
   static_volume:
   media_volume:
