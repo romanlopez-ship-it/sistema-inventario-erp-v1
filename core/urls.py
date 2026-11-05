@@ -64,6 +64,8 @@ urlpatterns = [
     # API REST
     path('api/',        include((api_urlpatterns, 'api'))), # ← agregar W10
     path('api/auth/token/', obtain_auth_token, name='api_token'), # ← agregar W10
+    # E-commerce público — W13
+    path('catalogo/',   include('catalogo.urls', namespace='catalogo')),
     # Apps del ERP
     path('clientes/',    include('clientes.urls',       namespace='clientes')),
     path('proveedores/', include('proveedores.urls',    namespace='proveedores')),

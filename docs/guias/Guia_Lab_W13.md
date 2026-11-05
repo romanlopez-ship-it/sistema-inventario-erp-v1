@@ -568,7 +568,6 @@ mkdir catalogo\templates\catalogo
 
 ```html
 {% extends "base.html" %}
-{% load django_filters %}
 {% block title %}Catálogo de Productos{% endblock %}
 
 {% block content %}
@@ -732,6 +731,13 @@ mkdir catalogo\templates\catalogo
 {% endif %}
 {% endblock %}
 ```
+
+> ⚠️ **No agregues `{% load django_filters %}`.** `django-filter` no incluye
+> ninguna librería de *template tags* (no trae carpeta `templatetags/`), así que
+> esa línea provoca el error `TemplateSyntaxError: 'django_filters' is not a
+> registered tag library`. El filtro se procesa en la vista (`ProductoFilter`) y
+> en el template basta con mostrar sus campos: `{{ filtro.form.nombre }}`,
+> `{{ filtro.form.categoria }}`, etc. Esas variables no necesitan ningún `{% load %}`.
 
 ---
 
