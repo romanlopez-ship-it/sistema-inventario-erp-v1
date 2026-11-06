@@ -28,10 +28,14 @@ urlpatterns = [
     path('carrito/vaciar/',
          views.vaciar_carrito,
          name='vaciar'),
-    # Checkout — se implementa en W14
+    # Checkout con Stripe (W14)
     path('checkout/',
-         TemplateView.as_view(
-             template_name='catalogo/checkout_pendiente.html'
-         ),
+         views.checkout,
          name='checkout'),
+    path('pago-exitoso/<int:pedido_id>/',
+         views.pago_exitoso,
+         name='pago_exitoso'),
+    path('pago-error/',
+         views.pago_error,
+         name='pago_error'),
 ]
