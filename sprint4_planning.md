@@ -42,5 +42,5 @@ actualizando automáticamente el estado del pedido.
 | pago_exitoso: vaciar carrito + template | ✅ W14 |
 | pago_error: template con causas y reintento | ✅ W14 |
 | Tests con unittest.mock.patch | ✅ W14 |
-| Webhooks + actualizar estado pedido | ⏳ W15 |
-| Descontar stock al confirmar pago | ⏳ W15 |
+| Webhooks + actualizar estado pedido | ✅ W15 |
+| Descontar stock al confirmar pago | ✅ W15 |
