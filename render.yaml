@@ -1,5 +1,5 @@
-# render.yaml — Blueprint de Render (alcance W16: web Docker + PostgreSQL
-#                + Key Value/Redis + worker de Celery embebido)
+# render.yaml — Blueprint de Render (alcance W17: web Docker + PostgreSQL
+#                + Key Value/Redis + worker de Celery embebido + SendGrid)
 # Documentación: https://render.com/docs/blueprint-spec
 #
 # W16 — Celery en el plan gratuito:
@@ -9,8 +9,12 @@
 #   El Key Value (Redis) se crea a mano en el dashboard (plan Free, misma
 #   región oregon) y su "Internal Key Value URL" se pega en REDIS_URL.
 #
+# W17 — SendGrid (django-anymail):
+#   settings_prod.py activa el backend de SendGrid solo si existe
+#   SENDGRID_API_KEY. DEFAULT_FROM_EMAIL debe ser un Sender verificado.
+#   RENDER_EXTERNAL_URL (automática) se usa para los enlaces del correo.
+#
 # Fuera de alcance hasta su semana:
-#   W17   SendGrid (variables de entorno)
 #   W18   Celery Beat (tareas programadas)
 
 services:
@@ -49,6 +53,13 @@ services:
         sync: false
       - key: CELERY_EMBEDDED_WORKER  # 1 = worker dentro del contenedor web
         value: "1"
+      # W17: correo transaccional con SendGrid
+      - key: SENDGRID_API_KEY        # SG.xxxx (permiso Mail Send)
+        sync: false
+      - key: DEFAULT_FROM_EMAIL      # ERP Django <sender-verificado@...>
+        sync: false
+      - key: ADMIN_EMAIL             # recibe alertas de stock y errores 500
+        sync: false
 
 databases:
   - name: erp-django-db

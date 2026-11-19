@@ -87,6 +87,12 @@ LOGGING = {
     },
 }
 
+# ── CORREO (W17): SendGrid vía django-anymail ─────────────────────────────
+# Solo si SENDGRID_API_KEY está definida en Render; si falta, se queda el
+# backend de consola (el correo aparece en los Logs) y el sitio no falla.
+if SENDGRID_API_KEY:
+    EMAIL_BACKEND = 'anymail.backends.sendgrid.EmailBackend'
+
 # W03 agregará:
 # import dj_database_url
 # DATABASES = {'default': dj_database_url.config(conn_max_age=600)}
