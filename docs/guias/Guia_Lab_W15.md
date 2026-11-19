@@ -6,7 +6,7 @@
 ---
 
 | Campo | Detalle |
-|---|---|S
+|---|---|
 | **Semana** | W15 de 24 |
 | **Espiral** | E5 — E-commerce y Pagos |
 | **Sprint Scrum** | Sprint 4 — Review + Retrospectiva |

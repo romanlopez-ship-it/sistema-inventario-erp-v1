@@ -23,6 +23,7 @@ from django.views.decorators.http import require_POST
 
 from productos.models import Producto
 from ventas.models    import Pedido
+from ventas.tasks     import enviar_confirmacion_pedido   # W16
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,21 @@ def _manejar_pago_exitoso(payment_intent: dict) -> None:
 
         # Descontar stock de cada producto del snapshot
         _descontar_stock(pedido)
+
+        # ── W16: encolar la tarea de confirmación ─────────────────────
+        # El webhook es el ÚNICO punto que dispara el correo: se ejecuta
+        # aunque el usuario cierre el navegador y solo una vez por pedido.
+        # Si Redis no responde, el pago ya quedó registrado: se deja
+        # constancia en el log y se responde 200 a Stripe igualmente.
+        try:
+            enviar_confirmacion_pedido.delay(pedido.pk)
+        except Exception:
+            logger.exception(
+                f'Webhook: no se pudo encolar la confirmación del '
+                f'pedido {pedido.numero_pedido} (¿Redis disponible?).'
+            )
+        # ─────────────────────────────────────────────────────────────
+
     else:
         logger.info(
             f'Pedido {pedido.numero_pedido} ya estaba pagado — '
