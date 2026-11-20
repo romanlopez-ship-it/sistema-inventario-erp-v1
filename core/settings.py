@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 import environ
 from pathlib import Path
+from celery.schedules import crontab
+from datetime import timedelta   # ← necesario para CELERY_BEAT_SCHEDULE
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -379,6 +381,27 @@ CELERY_TASK_DEFAULT_QUEUE = 'erp_django'
 # En modo EAGER, las excepciones de la tarea se propagan (útil en tests)
 CELERY_TASK_EAGER_PROPAGATES = True
 
+CELERY_BEAT_SCHEDULE = {
+
+    # Verificar stock bajo cada hora
+    'verificar-stock-bajo-cada-hora': {
+        'task':     'ventas.verificar_stock_bajo',
+        'schedule': timedelta(hours=1),
+        'args':     (5,),   # umbral = 5 unidades
+        'options':  {'queue': 'erp_django'},
+    },
+
+    # Reporte de ventas diario a las 8:00 AM (hora México)
+    'reporte-ventas-diario-8am': {
+        'task':     'ventas.reporte_ventas_diario',
+        'schedule': crontab(hour=8, minute=30),
+        'options':  {'queue': 'erp_django'},
+    },
+
+}
+
+# Necesario para que Beat use la zona horaria de Django (no UTC)
+CELERY_BEAT_TIMEZONE = TIME_ZONE   # 'America/Mexico_City'
 
 # ── DJANGO SITES (requerido por allauth) ──────────────────────────────────
 SITE_ID = 1
