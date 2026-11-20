@@ -174,6 +174,12 @@ verificado: *"The from address does not match a verified Sender Identity"*.
 3. Abrir el correo de SendGrid y pulsar **Verify Single Sender**
 4. Ese correo exacto será `DEFAULT_FROM_EMAIL`
 
+> ⚠️ **From ≠ Reply-To.** El formulario del Single Sender pide dos correos:
+> **From Email Address** (el remitente, el que se verifica) y **Reply To**
+> (a dónde llegan las respuestas). `DEFAULT_FROM_EMAIL` debe ser el **From**.
+> Poner el Reply-To (p. ej. `admin-no-reply@tu-servicio.onrender.com`)
+> provoca el 403 aunque el Sender aparezca como verificado.
+
 > `noreply@tu-dominio.com` solo funciona si eres dueño del dominio y lo
 > autenticas (Domain Authentication con registros DNS). Para el laboratorio
 > usa Single Sender. Los correos desde un remitente `@gmail.com` pueden
@@ -1412,7 +1418,7 @@ Blueprint **no** crea las variables `sync: false`: hay que agregarlas a mano.
 | `REDIS_URL` | Internal Key Value URL `redis://red-...:6379` | W16 |
 | `CELERY_EMBEDDED_WORKER` | `1` | W16 |
 | **`SENDGRID_API_KEY`** | `SG....` | **W17** |
-| **`DEFAULT_FROM_EMAIL`** | `ERP Django <tu-sender-verificado@gmail.com>` | **W17** |
+| **`DEFAULT_FROM_EMAIL`** | `ERP Django <correo-From-verificado>` (no el Reply-To) | **W17** |
 | **`ADMIN_EMAIL`** | correo que recibe alertas | **W17** |
 | `AWS_*` | opcional (W11) | W11 |
 
@@ -1453,6 +1459,8 @@ python manage.py shell -c "from ventas.tasks import verificar_stock_bajo; print(
 | El correo aparece en los Logs como texto | Falta `SENDGRID_API_KEY` | Agregar la variable y redeploy |
 | Pedido `pagado` pero sin correo ni tarea | El webhook no llega | Revisar W15 §3.3 (URL propia de Render y `whsec` del Dashboard) |
 | Correo recibido en Spam | Remitente `@gmail.com` sin autenticación de dominio | Normal en el laboratorio; en producción usar Domain Authentication |
+| Webhook: `no se pudo encolar la confirmación ... VersionMismatch: Redis transport requires redis-py 6.1.0 or later` | `kombu` ≥ 5.6 con `redis==5.0.1` | `kombu==5.3.7` en `requirements.txt` (W16 §1.1) y redeploy |
+| Pedido pagado que se quedó sin correo | Falló el encolado o el envío; el webhook no reenvía un pedido ya pagado | Admin → Pedidos → acción **Enviar correo de confirmación** (W18 §5.4) |
 
 ---
 
@@ -1702,6 +1710,17 @@ en esta versión:
 | 14 | 6.1 | "8 pruebas" pero listaba 9 | 9 + 3 de regresión = 12 |
 | 15 | Diagrama / W18 / Referencia | Worker "proceso separado", `docker-compose` y Redis local | Worker embebido en Render; laboratorio en EAGER |
 | 16 | — | Faltaba el despliegue a Render | Nueva PARTE 7 con variables y solución de problemas |
+
+**Revisión 2026-11-20 — confirmado en Render:** la compra de prueba generó
+el correo *"Confirmación de pedido PED-2026-0013"*, entregado vía SendGrid.
+Lecciones de ese despliegue, ya incorporadas arriba:
+
+| # | Sección | Problema | Corrección |
+|---|---|---|---|
+| 17 | 1.2-bis / 7.2 | `DEFAULT_FROM_EMAIL` con el **Reply-To** del Sender | Usar el **From** verificado |
+| 18 | 7.4 | Webhook sin poder encolar: `VersionMismatch` de kombu | `kombu==5.3.7` (W16 §1.1) |
+| 19 | 7.4 | Sin forma de reenviar el correo de un pedido ya pagado | Acción del admin (W18 §5.4) |
+| 20 | 6.3 | 11 fallas heredadas de W01–W12 | Corregidas en W18 §6.4 → 171 tests OK |
 
 ---
 

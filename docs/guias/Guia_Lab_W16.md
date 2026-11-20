@@ -39,6 +39,9 @@
 > 6. El `.delay()` del webhook va en `try/except`: si Redis falla, el pago queda registrado y Stripe recibe 200.
 > 7. `docker-compose.yml`: el worker usa las mismas credenciales que el servicio `db` (`.env`), y Flower recibe sus variables.
 > 8. Tests: 9 pruebas (la vista **no** encola · el webhook tolera la caída de Redis · modo EAGER sin `REDIS_URL`).
+> 9. **(revisión 2026-11-20)** Fijar `kombu==5.3.7`: con `kombu==5.7.0` (lo que puede traer `pip freeze`)
+>    y `redis==5.0.1`, en Render **ninguna tarea llega a Redis** (`VersionMismatch`). En el
+>    laboratorio no se nota porque el modo EAGER no usa Redis. Ver 1.1 y 8.3.
 
 ---
 
@@ -219,8 +222,16 @@ stock bajo y reporte diario de ventas.
 ### 1.1 Instalar paquetes
 
 ```cmd
-pip install "celery==5.3.6" "redis==5.0.1" "flower==2.0.1"
+pip install "celery==5.3.6" "redis==5.0.1" "kombu==5.3.7" "flower==2.0.1"
+pip check
 ```
+
+> ⚠️ **Fijar `kombu==5.3.7`.** `kombu` es la librería con la que Celery habla
+> con Redis. Las versiones ≥ 5.6 exigen `redis>=6.1`; con `redis==5.0.1`
+> el worker y el `.delay()` fallan en Render con
+> `kombu.exceptions.VersionMismatch: Redis transport requires redis-py versions 6.1.0 or later`.
+> Después de regenerar `requirements.txt`, **revisar que diga `kombu==5.3.7`**
+> y que `pip check` responda `No broken requirements found.`
 
 Actualizar `requirements.txt` **según la terminal que uses**:
 
@@ -245,6 +256,7 @@ Verificar instalaciones:
 python -c "import celery; print('Celery', celery.__version__)"
 python -c "import redis; print('redis', redis.__version__)"
 python -c "import flower; print('flower OK')"
+python -c "import kombu; print('kombu', kombu.__version__)"
 ```
 
 **Resultado esperado:**
@@ -252,6 +264,7 @@ python -c "import flower; print('flower OK')"
 Celery 5.3.6
 redis 5.0.1
 flower OK
+kombu 5.3.7
 ```
 
 ### 1.2 Crear el broker Redis en Render (Key Value)
@@ -1181,6 +1194,9 @@ Servicio web → **Logs**. Deben aparecer, en este orden:
 > Si ves `Worker de Celery embebido DESACTIVADO.` → falta
 > `CELERY_EMBEDDED_WORKER=1` o `REDIS_URL` en Environment.
 > Si ves `Cannot connect to redis://...` → revisa la región y la URL interna.
+> Si ves `VersionMismatch: Redis transport requires redis-py versions 6.1.0 or later`
+> (en el arranque del worker o en el webhook) → `kombu` incompatible: fijar
+> `kombu==5.3.7` en `requirements.txt` (ver 1.1) y volver a desplegar.
 
 ### 8.4 Prueba de extremo a extremo
 
