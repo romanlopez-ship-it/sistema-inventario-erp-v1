@@ -745,6 +745,47 @@ no dispara** y Celery no recupera una ejecución perdida. Para el reporte
 diario crear un monitor gratuito (UptimeRobot o cron-job.org) que haga
 `GET https://TU-SERVICIO.onrender.com/` cada 10 minutos.
 
+### 4.6 `docker-compose.yml` (opcional — solo con Docker Desktop)
+
+En el laboratorio **no se usa**. Si algún equipo tiene Docker Desktop, el
+stack local de W16 se completa con un servicio `celery_beat`, después de
+`celery_worker`:
+
+```yaml
+  # ── Celery Beat — Scheduler de tareas programadas — W18 ────────────
+  # Beat NUNCA debe tener múltiples réplicas (un solo scheduler).
+  # Scheduler por defecto (archivo), igual que en Render: el proyecto no
+  # instala django_celery_beat. En Render, Beat va embebido en el worker
+  # (docker-entrypoint.sh, CELERY_EMBEDDED_BEAT=1); aquí es un servicio aparte.
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A core beat -l info --schedule=/tmp/celerybeat-schedule
+    volumes:
+      - .:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    env_file:
+      - .env                             # REPORTE_DIARIO_HORA, ADMIN_EMAIL...
+    environment:
+      DJANGO_SETTINGS_MODULE: core.settings_prod
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-12345}@db:5432/${POSTGRES_DB:-erp_db}
+      REDIS_URL: redis://redis:6379/0
+```
+
+> ⚠️ La versión anterior de esta guía usaba
+> `--scheduler django_celery_beat.schedulers:DatabaseScheduler` (paquete
+> **no instalado** → Beat no arranca), credenciales `erp_user/erp_pass_local`
+> que no coinciden con el servicio `db` (`.env`) y no cargaba `.env`
+> (sin `SENDGRID_API_KEY` ni `ADMIN_EMAIL`). Se corrigió con el mismo
+> patrón que `celery_worker`. El servicio `web` mantiene
+> `CELERY_EMBEDDED_WORKER: "0"`, así que nunca hay dos Beat.
+
 ---
 
 ## PARTE 5 — Verificar en Local (EAGER) y en Render (15 min)
@@ -1434,6 +1475,7 @@ git status
 ::   templates/emails/reporte_ventas.html + .txt
 ::   core/settings.py (CELERY_BEAT_SCHEDULE + REPORTE_DIARIO_HORA)
 ::   docker-entrypoint.sh (worker --beat)
+::   docker-compose.yml (celery_beat opcional, solo Docker Desktop)
 ::   render.yaml (CELERY_EMBEDDED_BEAT, REPORTE_DIARIO_HORA)
 ::   requirements.txt (kombu==5.3.7, UTF-8)
 ::   tests/test_w18_beat.py + tests/test_w18_dependencias.py
@@ -1582,6 +1624,7 @@ reporte diario recibido exactamente a la hora de `REPORTE_DIARIO_HORA`.
 | # | Sección | Problema en la versión anterior | Corrección |
 |---|---|---|---|
 | 1 | Parte 4 | Beat como servicio de `docker-compose` con `django_celery_beat` (no instalado) | Beat embebido: `worker --beat` en `docker-entrypoint.sh` |
+| 1b | 4.6 | `celery_beat` de `docker-compose.yml` con credenciales y scheduler erróneos | Servicio corregido (opcional, solo Docker Desktop) |
 | 2 | Parte 5 | 4 terminales con Redis local y Flower en `:5555` | Laboratorio en EAGER; verificación con los Logs de Render |
 | 3 | 2.2 | Top 5 solo de `DetalleVenta`: el checkout no crea `Venta` | Suma también `Pedido.items_snapshot` |
 | 4 | 2.2 | URL fija `erp-django-utec.onrender.com` | `_url_absoluta()` con `SITE_URL` |
