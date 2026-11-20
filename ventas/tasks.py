@@ -260,7 +260,7 @@ def _enviar_alerta_stock(productos_bajos: list, umbral: int) -> bool:
     )
     return True
 
-# ventas/tasks.py — agregar al final del archivo
+# ── W18: reporte diario (Celery Beat) ─────────────────────────────────────
 
 @shared_task(
     bind=True,
@@ -270,7 +270,8 @@ def _enviar_alerta_stock(productos_bajos: list, umbral: int) -> bool:
 def reporte_ventas_diario(self) -> dict:
     """Genera y envía el reporte diario de ventas al administrador.
 
-    Se ejecuta automáticamente a las 8:00 AM todos los días
+    Se ejecuta automáticamente todos los días a la hora de
+    settings.REPORTE_DIARIO_HORA (default 08:00, hora de México)
     mediante Celery Beat (configurado en CELERY_BEAT_SCHEDULE).
 
     Cálculos realizados en SQL (no en Python) para máxima eficiencia:
@@ -305,7 +306,12 @@ def reporte_ventas_diario(self) -> dict:
     )['total'] or Decimal('0.00')
 
     # ── 2. Top 5 productos por ingreso del día ─────────────────────────
-    top_productos = list(
+    # Dos fuentes: ventas internas (DetalleVenta) y compras de la tienda
+    # en línea (Pedido.items_snapshot). El checkout NO crea Venta, así
+    # que sin la segunda fuente las compras en línea nunca aparecían.
+    acumulado = {}   # nombre → {'unidades': int, 'ingreso': Decimal}
+
+    internas = (
         DetalleVenta.objects
         .filter(venta__fecha__date=hoy)
         .values(nombre=F('producto__nombre'))
@@ -318,8 +324,32 @@ def reporte_ventas_diario(self) -> dict:
                 )
             )
         )
-        .order_by('-ingreso')[:5]
     )
+    for fila in internas:
+        dato = acumulado.setdefault(
+            fila['nombre'], {'unidades': 0, 'ingreso': Decimal('0.00')}
+        )
+        dato['unidades'] += fila['unidades'] or 0
+        dato['ingreso']  += fila['ingreso'] or Decimal('0.00')
+
+    for pedido in pedidos_hoy.only('items_snapshot'):
+        for item in _items_con_subtotal(pedido.items_snapshot):
+            dato = acumulado.setdefault(
+                item.get('nombre', '¿?'),
+                {'unidades': 0, 'ingreso': Decimal('0.00')},
+            )
+            dato['unidades'] += item['cantidad']
+            dato['ingreso']  += item['subtotal']
+
+    top_productos = sorted(
+        (
+            {'nombre': nombre, 'unidades': d['unidades'],
+             'ingreso': str(d['ingreso'].quantize(Decimal('0.01')))}
+            for nombre, d in acumulado.items()
+        ),
+        key=lambda x: Decimal(x['ingreso']),
+        reverse=True,
+    )[:5]
 
     logger.info(
         f'[reporte_diario] {hoy}: {total_pedidos} pedidos, '
@@ -353,9 +383,7 @@ def _enviar_reporte_ventas(
         top_productos:   Lista de dicts con nombre, unidades, ingreso.
         config:          Instancia de ConfiguracionERP.
     """
-    url_admin = (
-        'https://erp-django-utec.onrender.com/admin/ventas/venta/'
-    )
+    url_admin = _url_absoluta('admin:ventas_pedido_changelist')
     fecha_str = fecha.strftime('%d/%m/%Y')
 
     contexto = {
@@ -365,6 +393,7 @@ def _enviar_reporte_ventas(
         'total_facturado': total_facturado,
         'top_productos':   top_productos,
         'url_admin':       url_admin,
+        'hora_programada': settings.REPORTE_DIARIO_HORA,
     }
 
     asunto      = f'Reporte de ventas del {fecha_str} — {config.nombre_empresa}'

@@ -133,3 +133,45 @@ class ReporteVentasTest(TestCase):
         self.assertIn('total_facturado', resultado)
         self.assertIn('top_productos',   resultado)
         self.assertGreaterEqual(resultado['total_pedidos'], 0)
+
+
+# ── Regresión (2026-11-20): compras en línea y hora configurable ─────────
+
+@override_settings(**EMAIL_SETTINGS)
+class ReporteTiendaEnLineaTest(TestCase):
+    """El checkout solo crea Pedido (no Venta): el top debe incluirlo."""
+
+    def setUp(self):
+        mail.outbox = []
+        ConfiguracionERP.get_instance()
+        cli = Cliente.objects.create(nombre='Cliente Web', correo='web@test.com')
+        Pedido.objects.create(
+            numero_pedido  = 'PED-WEB-001',
+            cliente        = cli,
+            estado         = 'pagado',
+            total_pagado   = Decimal('231.42'),
+            items_snapshot = [
+                {'producto_id': 1, 'nombre': 'Vino Web',
+                 'cantidad': 2, 'precio': '99.75'},
+            ],
+        )
+
+    def test_top_incluye_productos_de_pedidos_en_linea(self):
+        resultado = reporte_ventas_diario.delay().get()
+        self.assertEqual(resultado['total_pedidos'], 1)
+        self.assertEqual(
+            resultado['top_productos'],
+            [{'nombre': 'Vino Web', 'unidades': 2, 'ingreso': '199.50'}],
+        )
+        self.assertIn('Vino Web', mail.outbox[0].body)
+
+
+class HoraReporteConfigurableTest(TestCase):
+    """La hora del crontab sale de REPORTE_DIARIO_HORA (hora de México)."""
+
+    def test_crontab_coincide_con_reporte_diario_hora(self):
+        h, m = (int(x) for x in settings.REPORTE_DIARIO_HORA.split(':'))
+        cron = settings.CELERY_BEAT_SCHEDULE['reporte-ventas-diario-8am']['schedule']
+        self.assertEqual(cron.hour, {h})
+        self.assertEqual(cron.minute, {m})
+        self.assertEqual(settings.CELERY_TIMEZONE, 'America/Mexico_City')

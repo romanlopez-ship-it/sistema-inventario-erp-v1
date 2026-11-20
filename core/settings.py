@@ -381,6 +381,14 @@ CELERY_TASK_DEFAULT_QUEUE = 'erp_django'
 # En modo EAGER, las excepciones de la tarea se propagan (útil en tests)
 CELERY_TASK_EAGER_PROPAGATES = True
 
+# Hora del reporte diario (hora de México), configurable sin tocar código:
+#   Render → Environment → REPORTE_DIARIO_HORA=10:00
+REPORTE_DIARIO_HORA = env('REPORTE_DIARIO_HORA', default='08:00')
+try:
+    _rep_h, _rep_m = (int(x) for x in REPORTE_DIARIO_HORA.split(':'))
+except ValueError:
+    _rep_h, _rep_m = 8, 0
+
 CELERY_BEAT_SCHEDULE = {
 
     # Verificar stock bajo cada hora
@@ -391,10 +399,10 @@ CELERY_BEAT_SCHEDULE = {
         'options':  {'queue': 'erp_django'},
     },
 
-    # Reporte de ventas diario a las 8:00 AM (hora México)
+    # Reporte de ventas diario (default 8:00 AM hora México)
     'reporte-ventas-diario-8am': {
         'task':     'ventas.reporte_ventas_diario',
-        'schedule': crontab(hour=8, minute=30),
+        'schedule': crontab(hour=_rep_h, minute=_rep_m),
         'options':  {'queue': 'erp_django'},
     },
 
