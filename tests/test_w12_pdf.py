@@ -6,6 +6,7 @@ Ejecutar con:
     docker compose run --rm --entrypoint "" web python manage.py test tests.test_w12_pdf -v 2
 """
 from decimal import Decimal
+import unittest
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -15,6 +16,16 @@ from clientes.models import Cliente
 from configuracion.models import ConfiguracionERP
 from productos.models import Categoria, Producto
 from ventas.models import DetalleVenta, Venta
+
+# WeasyPrint necesita Pango/Cairo (GTK). En Windows sin GTK no carga:
+# las pruebas que generan el PDF se OMITEN (skip) y corren en Docker/Render.
+try:
+    import weasyprint  # noqa: F401
+    WEASYPRINT_OK = True
+except OSError:
+    WEASYPRINT_OK = False
+REQUIERE_GTK = unittest.skipUnless(
+    WEASYPRINT_OK, 'WeasyPrint sin Pango/Cairo (Windows sin GTK): corre en Docker/Render')
 
 
 class VentaPdfTest(TestCase):
@@ -41,6 +52,7 @@ class VentaPdfTest(TestCase):
         r = self.client.get(reverse("ventas:pdf", kwargs={"venta_id": 999999}))
         self.assertEqual(r.status_code, 404)
 
+    @REQUIERE_GTK
     def test_pdf_valido(self):
         self.client.force_login(self.user)
         r = self.client.get(self.url)
@@ -48,6 +60,7 @@ class VentaPdfTest(TestCase):
         self.assertEqual(r["Content-Type"], "application/pdf")
         self.assertTrue(r.content.startswith(b"%PDF"))
 
+    @REQUIERE_GTK
     def test_logo_inexistente_no_rompe_pdf(self):
         """Disco efímero de Render: el archivo del logo puede no existir."""
         config = ConfiguracionERP.get_instance()

@@ -186,14 +186,16 @@ def venta_pdf(request, venta_id: int) -> HttpResponse:
     Returns:
         HttpResponse con Content-Type application/pdf y descarga directa.
     """
-    import weasyprint
-
     venta = get_object_or_404(
         Venta.objects.select_related("cliente").prefetch_related(
             "detalles__producto__categoria"
         ),
         pk=venta_id,
     )
+    # Import después del 404: WeasyPrint carga Pango/Cairo (librerías
+    # nativas). Así una venta inexistente responde 404 aunque falten.
+    import weasyprint
+
     config = ConfiguracionERP.get_instance()
     context = {
         "venta": venta,

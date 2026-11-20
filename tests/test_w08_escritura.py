@@ -87,8 +87,9 @@ class ProductoEscrituraTest(TestCase):
         }
         r = self.client.post(reverse('productos:crear'), datos)
         self.assertEqual(r.status_code, 200)
-        self.assertFormError(r, 'form', 'precio',
-                             'Ensure this value is greater than or equal to 0.00.')
+        # LANGUAGE_CODE='es-mx': el mensaje sale en español; se valida
+        # el campo con error, no el texto (API de Django 4.2).
+        self.assertIn('precio', r.context['form'].errors)
 
     def test_delete_elimina_producto(self):
         """POST /productos/<id>/eliminar/ → borra el producto y redirige."""
@@ -134,7 +135,9 @@ class ClienteEscrituraTest(TestCase):
             'activo': True,
         })
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, 'ya existe')
+        # Django: 'Ya existe Cliente con este Correo electrónico.'
+        self.assertIn('correo', r.context['form'].errors)
+        self.assertIn('ya existe', r.content.decode().lower())
 
 
 class ProveedorEscrituraTest(TestCase):

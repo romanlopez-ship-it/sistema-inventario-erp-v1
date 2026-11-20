@@ -23,7 +23,9 @@ from . import views
 app_name = 'clientes'
 
 urlpatterns = [
-    path('lista/',                    views.ClienteListView.as_view(),         name='lista'),
+    # /clientes/ — igual que productos/proveedores/ventas (menú del admin)
+    path('',                          views.ClienteListView.as_view(),         name='inicio'),
+    path('lista/',                   views.ClienteListView.as_view(),         name='lista'),
     path('detalle/<int:cliente_id>/', views.ClienteDetailView.as_view(),       name='detalle'),
     path('nuevo/',                    views.ClienteCreateView.as_view(),  name='crear'),
     path('<int:cliente_id>/editar/',  views.ClienteUpdateView.as_view(),  name='editar'),
